@@ -134,7 +134,7 @@ def is_cell_in_bounds(cell: str, config: GridConfig | None = None) -> bool:
         col, row = parse_cell(cell)
     except ValueError:
         return False
-    return 0 <= col < cfg.coarse_cols and 0 <= row < cfg.coarse_rows
+    return 0 <= col < cfg.fine_cols and 0 <= row < cfg.fine_rows
 
 
 def cells_to_grid_snapshot(cells: list[str]) -> dict[str, list[str]]:

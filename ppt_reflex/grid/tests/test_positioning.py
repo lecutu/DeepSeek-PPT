@@ -65,19 +65,20 @@ def test_cell_range():
 def test_is_cell_in_bounds():
     cfg = GridConfig()
     assert is_cell_in_bounds("A1", cfg) == True
-    assert is_cell_in_bounds("P9", cfg) == True
-    assert is_cell_in_bounds("Q1", cfg) == False
-    assert is_cell_in_bounds("A10", cfg) == False  # row 10 is off (0-8)
+    assert is_cell_in_bounds("AF18", cfg) == True    # col 31, row 17 — fine-grid (0-31, 0-17)
+    assert is_cell_in_bounds("BG1", cfg) == False     # col 32 → off (fine_cols=32, so max col=31)
+    assert is_cell_in_bounds("A19", cfg) == False     # row 18 → off (fine_rows=18, so max row=17)
     print("[PASS] is_cell_in_bounds")
 
 
 def test_config_override():
-    config = GridConfig(coarse_cols=8, coarse_rows=6,
+    config = GridConfig(coarse_cols=8, coarse_rows=6, fine_cols=16, fine_rows=12,
                         coarse_cell_pt=100.0, canvas_w_pt=800, canvas_h_pt=600)
     cells = bbox_to_coarse_cells(0, 0, 100, 100, config)
     assert set(cells) == {"A1"}
-    assert is_cell_in_bounds("H6", config) == True
-    assert is_cell_in_bounds("H7", config) == False
+    assert is_cell_in_bounds("P12", config) == True    # col 15, row 11 → fine-grid (0-15, 0-11)
+    assert is_cell_in_bounds("Q1", config) == False     # col 16 → off
+    assert is_cell_in_bounds("A13", config) == False    # row 12 → off
     print("[PASS] config_override")
 
 

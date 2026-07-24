@@ -84,6 +84,8 @@ def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str) -> Non
     text/fill/font/alignment are applied. Without payload, empty placeholder.
     Multi-line code blocks get dark background + monospace font.
     locked elements retain position only (template decoration).
+
+    All bbox coordinates are clamped to slide bounds before rendering.
     """
     from pptx import Presentation
     from pptx.util import Pt, Emu
@@ -109,6 +111,9 @@ def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str) -> Non
         if bbox is None:
             continue
         x, y, w, h = bbox
+
+        # Clamp to slide bounds (兜底防止坐标爆炸/坍缩后的盲画)
+        x, y, w, h = _clamp_bbox(x, y, w, h, config)
 
         content_type = _get_type_for_id(owner_id, fine_cells, grid)
         cell_sample = grid.get_cell(next(iter(fine_cells)))
@@ -142,6 +147,23 @@ def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str) -> Non
             box.text_frame.text = ""
 
     prs.save(ppt_path)
+
+
+# ═══════════════════════════════════════════════════════════
+# BBOX CLAMP — 硬裁剪，防止任何算错的形状出页
+# ═══════════════════════════════════════════════════════════
+
+def _clamp_bbox(x: float, y: float, w: float, h: float,
+                config: GridConfig) -> tuple[float, float, float, float]:
+    """Clamp bbox to slide bounds. Guarantees no shape exceeds canvas."""
+    SW = config.canvas_w_pt
+    SH = config.canvas_h_pt
+    M = 0.0  # safe margin already applied upstream; hard-clamp here
+    cx = max(M, min(x, SW - 1))
+    cy = max(M, min(y, SH - 1))
+    cw = max(1, min(w, SW - cx))
+    ch = max(1, min(h, SH - cy))
+    return cx, cy, cw, ch
 
 
 # ═══════════════════════════════════════════════════════════
@@ -219,11 +241,32 @@ def _lookup_shape(shape_id: str) -> int:
     return _SHAPE_MAP.get(shape_id.lower(), 1)
 
 
+# ═══════════════════════════════════════════════════════════
+# RENDER: CONNECTOR — with anchor support
+# ═══════════════════════════════════════════════════════════
+
+_ANCHOR_FACTORS = {
+    "top":      (0.5, 0.0),
+    "bottom":   (0.5, 1.0),
+    "left":     (0.0, 0.5),
+    "right":    (1.0, 0.5),
+    "center":   (0.5, 0.5),
+}
+
+
+def _anchor_point(col: int, row: int, anchor: str, cw: float) -> tuple[float, float]:
+    """Compute anchor coordinate in pt from fine-cell address + anchor keyword."""
+    fx, fy = _ANCHOR_FACTORS.get(anchor, (0.5, 0.5))
+    return (col + fx) * cw, (row + fy) * cw
+
+
 def _render_connector(slide, payload: "ElementPayload", config: "GridConfig") -> None:
     """Render an arrow connector between two grid cells.
 
-    Uses connector_from / connector_to cell addresses → center pt coordinates.
-    Draws a straight line with arrowhead.
+    Uses connector_from / connector_to cell addresses → anchor point coordinates.
+    Draws a straight line with arrowhead at target end.
+
+    Anchor keywords: "top"|"bottom"|"left"|"right"|"center"
     """
     from pptx.util import Pt, Emu
     from pptx.dml.color import RGBColor
@@ -242,21 +285,23 @@ def _render_connector(slide, payload: "ElementPayload", config: "GridConfig") ->
     except ValueError:
         return
 
-    # Cell center coordinates in pt
     cw = config.fine_cell_pt
-    sx = (src_col + 0.5) * cw
-    sy = (src_row + 0.5) * cw
-    ex = (dst_col + 0.5) * cw
-    ey = (dst_row + 0.5) * cw
 
-    # Add a connector line
+    sx, sy = _anchor_point(src_col, src_row, payload.connector_anchor_from, cw)
+    ex, ey = _anchor_point(dst_col, dst_row, payload.connector_anchor_to, cw)
+
+    # Clamp endpoints to slide bounds
+    sx = max(0, min(sx, config.canvas_w_pt - 1))
+    sy = max(0, min(sy, config.canvas_h_pt - 1))
+    ex = max(0, min(ex, config.canvas_w_pt - 1))
+    ey = max(0, min(ey, config.canvas_h_pt - 1))
+
     connector = slide.shapes.add_connector(
         MSO_CONNECTOR_TYPE.STRAIGHT, Pt(sx), Pt(sy), Pt(ex), Pt(ey))
     connector.line.color.rgb = RGBColor(*payload.line_color)
     connector.line.width = Pt(payload.line_width_pt)
 
     # Arrowhead at target end
-    from pptx.oxml.ns import qn
     spPr = connector._element.find(qn('p:spPr'))
     if spPr is not None:
         ln = spPr.find(qn('a:ln'))
@@ -269,6 +314,10 @@ def _render_connector(slide, payload: "ElementPayload", config: "GridConfig") ->
             tail.set('w', 'med')
             tail.set('len', 'med')
 
+
+# ═══════════════════════════════════════════════════════════
+# RENDER: TEXT / TEXTBOX (with shape_id)
+# ═══════════════════════════════════════════════════════════
 
 def _render_payload(slide, x: float, y: float, w: float, h: float,
                     content_type: ContentType, p: ElementPayload,
@@ -324,6 +373,10 @@ def _render_payload(slide, x: float, y: float, w: float, h: float,
         para.space_after = Pt(0)
         para.space_before = Pt(0)
 
+
+# ═══════════════════════════════════════════════════════════
+# RENDER: IMAGE
+# ═══════════════════════════════════════════════════════════
 
 def _render_image(slide, x: float, y: float, w: float, h: float,
                   p: ElementPayload) -> None:

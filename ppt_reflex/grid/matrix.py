@@ -1,116 +1,81 @@
 """
-grid/matrix.py — 交互矩阵：ContentType × ContentType → Verdict + z_hint
+grid/matrix.py — 碰撞判定：仅 entity_table 内跑排他检查。
 
-只判规则，不持有状态。info_grid 和 positioning 各司其职，
-matrix 只回答 "X 类型叠 Y 类型 = 允许/警告/阻止"。
+语义角色 (SemanticRole) 决定表分配，表决定是否碰撞。
+overlay 元素 (CONNECTOR/ANNOTATION/EMPHASIS/BACKDROP) 不参与碰撞。
 """
 
 from __future__ import annotations
 from .types import (
     ContentType, Verdict, Conflict, GridConfig,
-    BLOCK_PAIRS, DEFAULT_POLICY, Z_ORDER_RULES,
+    SemanticRole, ENTITY_ROLES,
 )
 from .info_grid import InformationGrid, InfoCell
 
 
 class InteractionMatrix:
-    """类型×类型 → 判定。可扩展样式规则（第二版）。"""
+    """Entity × Entity → BLOCK/ALLOW/WARN。Overlay 元素不参与。"""
 
     def __init__(self, config: GridConfig | None = None):
         self.config = config or GridConfig()
-        self._block_pairs = set(BLOCK_PAIRS)       # 可运行时添加
-        self._z_order_rules = dict(Z_ORDER_RULES)   # 可运行时修改
-
-    # ── core ────────────────────────────────────────────────
-
-    def judge(self, existing_type: ContentType, new_type: ContentType) -> Verdict:
-        """两类型重叠 → ALLOW | WARN | BLOCK。
-
-        >>> InteractionMatrix().judge(ContentType.TEXT, ContentType.TEXT)
-        Verdict.BLOCK
-        >>> InteractionMatrix().judge(ContentType.TEXT, ContentType.TEXTBOX)
-        Verdict.ALLOW
-        """
-        pair = (existing_type, new_type)
-        if pair in self._block_pairs:
-            return Verdict.BLOCK
-        return self.config.default_policy
-
-    def z_hint(self, existing_type: ContentType, new_type: ContentType) -> str | None:
-        """建议新元素的 z-order: "new_above" | "new_below" | "either" | None"""
-        for (a, b), hint in self._z_order_rules.items():
-            if (a == existing_type and b == new_type) or (a == new_type and b == existing_type):
-                return hint
-        return None
-
-    # ── bulk check ──────────────────────────────────────────
 
     def check_all(self, covered_cells: list[tuple[str, InfoCell]],
-                  new_type: ContentType, new_id: str) -> list[Conflict]:
-        """对一组已覆盖的信息格，逐个检查冲突。
+                  new_type: ContentType, new_id: str,
+                  new_role: SemanticRole = SemanticRole.ENTITY) -> list[Conflict]:
+        """检查新元素与已存在元素的冲突。
 
-        Args:
-            covered_cells: [(addr, InfoCell), ...] 来自 info_grid.cells_in_bbox()
-            new_type: 新元素的内容类型
-            new_id: 新元素的 ID
-
-        Returns:
-            仅返回 BLOCK 和 WARN 级别的冲突。
-            跳过了同一 owner（自我重叠）、locked 格、background 格。
+        核心规则：
+          1. overlay 元素永远不触发碰撞（不跟任何东西比）
+          2. entity × entity → BLOCK（实体之间互斥）
+          3. 同一 owner、locked、BACKGROUND → 跳过
+          4. CONNECTOR ContentType 已废除碰撞豁免——role 取代了它
         """
         conflicts: list[Conflict] = []
+
+        # Overlay elements never collide
+        if new_role not in ENTITY_ROLES:
+            return conflicts
+
         for addr, cell in covered_cells:
             if cell.owner_id is None:
                 continue
             if cell.owner_id == new_id:
-                continue                          # 自己的格子
+                continue
             if cell.locked and cell.source == "template":
-                continue                          # 模板装饰 — 不参与判定
+                continue
             if cell.content_type == ContentType.BACKGROUND:
-                continue                          # 背景 — 永远允许重叠
-
-            existing_type = cell.content_type or ContentType.UNKNOWN
-            # CONNECTOR always allowed — lines float above everything
-            if existing_type == ContentType.CONNECTOR or new_type == ContentType.CONNECTOR:
-                continue
-            verdict = self.judge(existing_type, new_type)
-
-            if verdict == Verdict.ALLOW:
                 continue
 
+            # Existing overlay → never blocks a new entity
+            if cell.role not in ENTITY_ROLES:
+                continue
+
+            # Entity × Entity → BLOCK
             conflict = Conflict(
                 cell_addr=addr,
                 existing_id=cell.owner_id,
                 new_id=new_id,
-                existing_type=existing_type,
+                existing_type=cell.content_type or ContentType.UNKNOWN,
                 new_type=new_type,
-                verdict=verdict,
-                detail=self._describe(existing_type, new_type, verdict),
+                existing_role=cell.role,
+                new_role=new_role,
+                verdict=Verdict.BLOCK,
+                detail=(
+                    f"Entity '{new_id}' ({new_type.value}) overlaps "
+                    f"entity '{cell.owner_id}' ({cell.content_type.value if cell.content_type else '?'}). "
+                    f"If '{new_id}' is meant to annotate/connect/highlight "
+                    f"'{cell.owner_id}', change its role to CONNECTOR/ANNOTATION/EMPHASIS "
+                    f"— do NOT move its coordinates."
+                ),
             )
             conflicts.append(conflict)
+
         return conflicts
 
-    # ── helpers ─────────────────────────────────────────────
+    def judge(self, existing_type: ContentType, new_type: ContentType) -> Verdict:
+        """Legacy two-type → Verdict. Always ALLOW — collision is role-driven now."""
+        return Verdict.ALLOW
 
-    @staticmethod
-    def _describe(et: ContentType, nt: ContentType, v: Verdict) -> str:
-        if v == Verdict.BLOCK:
-            return f"{et.value} 叠 {nt.value} → 阻止"
-        if v == Verdict.WARN:
-            return f"{et.value} 叠 {nt.value} → 警告"
-        return f"{et.value} 叠 {nt.value} → 允许"
-
-    # ── runtime customization ───────────────────────────────
-
-    def add_block_pair(self, a: ContentType, b: ContentType) -> None:
-        """运行时加一条 BLOCK 规则。"""
-        self._block_pairs.add((a, b))
-        self._block_pairs.add((b, a))
-
-    def remove_block_pair(self, a: ContentType, b: ContentType) -> None:
-        """运行时移除一条 BLOCK 规则。"""
-        self._block_pairs.discard((a, b))
-        self._block_pairs.discard((b, a))
-
-    def set_z_hint(self, a: ContentType, b: ContentType, hint: str) -> None:
-        self._z_order_rules[(a, b)] = hint
+    def z_hint(self, existing_type: ContentType, new_type: ContentType) -> str | None:
+        """Legacy z-hint. Always None — z-order is role-driven now."""
+        return None

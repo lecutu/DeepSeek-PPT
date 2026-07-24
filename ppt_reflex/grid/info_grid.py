@@ -7,7 +7,7 @@ grid/info_grid.py — 信息层：状态存储 + 占用/释放/查询
 
 from __future__ import annotations
 from copy import deepcopy
-from .types import GridConfig, InfoCell, ContentType, ElementPayload
+from .types import GridConfig, InfoCell, ContentType, ElementPayload, SemanticRole
 from .positioning import cell_name, parse_cell, bbox_to_fine_cells
 
 
@@ -78,7 +78,8 @@ class InformationGrid:
 
     def occupy(self, cells: list[str], owner_id: str, content_type: ContentType,
                z_order: int = 0, locked: bool = False, source: str = "agent",
-               payload: ElementPayload | None = None) -> None:
+               payload: ElementPayload | None = None,
+               role: SemanticRole = SemanticRole.ENTITY) -> None:
         """占用一组信息格。"""
         for addr in cells:
             cell = self.get_cell(addr)
@@ -86,6 +87,7 @@ class InformationGrid:
                 continue
             cell.owner_id = owner_id
             cell.content_type = content_type
+            cell.role = role
             cell.z_order = z_order
             cell.locked = locked
             cell.source = source
