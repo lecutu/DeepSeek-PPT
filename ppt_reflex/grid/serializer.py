@@ -120,6 +120,9 @@ def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str) -> Non
             if content_type == ContentType.IMAGE and payload.image_path:
                 _render_image(slide, x, y, w, h, payload)
                 continue
+            if content_type == ContentType.CONNECTOR:
+                _render_connector(slide, payload, grid.config)
+                continue
             _render_payload(slide, x, y, w, h, content_type, payload, ALIGN_MAP)
             continue
 
@@ -141,6 +144,130 @@ def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str) -> Non
     prs.save(ppt_path)
 
 
+# ═══════════════════════════════════════════════════════════
+# SHAPE ID MAP — ElementPayload.shape_id → python-pptx MSO_SHAPE
+# ═══════════════════════════════════════════════════════════
+
+_SHAPE_MAP = {
+    "rectangle":            1,
+    "rounded_rectangle":    5,
+    "diamond":              4,
+    "ellipse":              9,
+    "chevron":             55,
+    "pentagon":            56,
+    "hexagon":              9,
+    "star5":               92,
+    "star8":               93,
+    "triangle":             7,
+    "right_triangle":       8,
+    "right_arrow":         33,
+    "left_arrow":          34,
+    "up_arrow":            35,
+    "down_arrow":          36,
+    "striped_right_arrow": 93,
+    "arc":                 19,
+    "moon":                20,
+    "parallelogram":        7,
+    "trapezoid":            8,
+    "plus":                11,
+    "bevel":               15,
+    "can":                 22,
+    "cube":                16,
+    "donut":               23,
+    "lightning_bolt":      22,
+    "heart":               21,
+    "cloud":               179,
+    "banner":              68,
+    "seal5":               110,
+    "seal8":               111,
+    "flowchart_process":    1,    # rectangle
+    "flowchart_decision":   4,    # diamond
+    "flowchart_data":       6,    # parallelogram
+    "flowchart_predefined": 1,    # rectangle
+    "flowchart_internal_storage": 1,
+    "flowchart_document":   1,
+    "flowchart_multidocument": 1,
+    "flowchart_terminator": 5,    # rounded rectangle
+    "flowchart_preparation": 6,   # hexagon-like
+    "flowchart_manual_input": 6,
+    "flowchart_manual_operation": 6,
+    "flowchart_connector":   9,   # circle
+    "flowchart_offpage_connector": 6,
+    "flowchart_card":        1,
+    "flowchart_punched_tape": 1,
+    "flowchart_summing_junction": 9,
+    "flowchart_or":           9,
+    "flowchart_collate":      9,
+    "flowchart_sort":         9,
+    "flowchart_extract":      9,
+    "flowchart_merge":        7,
+    "flowchart_offline_storage": 1,
+    "flowchart_online_storage": 22,
+    "flowchart_magnetic_tape": 1,
+    "flowchart_magnetic_disk": 22,
+    "flowchart_magnetic_drum": 22,
+    "flowchart_display":      1,
+    "flowchart_delay":        1,
+}
+
+
+def _lookup_shape(shape_id: str) -> int:
+    """Map human-readable shape_id to python-pptx MSO_SHAPE integer.
+
+    Returns 1 (rectangle) for unknown keys.
+    """
+    return _SHAPE_MAP.get(shape_id.lower(), 1)
+
+
+def _render_connector(slide, payload: "ElementPayload", config: "GridConfig") -> None:
+    """Render an arrow connector between two grid cells.
+
+    Uses connector_from / connector_to cell addresses → center pt coordinates.
+    Draws a straight line with arrowhead.
+    """
+    from pptx.util import Pt, Emu
+    from pptx.dml.color import RGBColor
+    from pptx.oxml.ns import qn
+    from pptx.enum.shapes import MSO_CONNECTOR_TYPE
+    from .positioning import parse_cell
+
+    fc = payload.connector_from.strip()
+    tc = payload.connector_to.strip()
+    if not fc or not tc:
+        return
+
+    try:
+        src_col, src_row = parse_cell(fc)
+        dst_col, dst_row = parse_cell(tc)
+    except ValueError:
+        return
+
+    # Cell center coordinates in pt
+    cw = config.fine_cell_pt
+    sx = (src_col + 0.5) * cw
+    sy = (src_row + 0.5) * cw
+    ex = (dst_col + 0.5) * cw
+    ey = (dst_row + 0.5) * cw
+
+    # Add a connector line
+    connector = slide.shapes.add_connector(
+        MSO_CONNECTOR_TYPE.STRAIGHT, Pt(sx), Pt(sy), Pt(ex), Pt(ey))
+    connector.line.color.rgb = RGBColor(*payload.line_color)
+    connector.line.width = Pt(payload.line_width_pt)
+
+    # Arrowhead at target end
+    from pptx.oxml.ns import qn
+    ln = connector._element.find(qn('a:ln'))
+    if ln is not None:
+        tail = ln.find(qn('a:tailEnd'))
+        if tail is None:
+            from lxml import etree
+            tail = etree.SubElement(ln, qn('a:tailEnd'))
+        tail.set('type', 'triangle')
+        tail.set('w', 'med')
+        tail.set('len', 'med')
+
+
 def _render_payload(slide, x: float, y: float, w: float, h: float,
                     content_type: ContentType, p: ElementPayload,
                     align_map: dict) -> None:
@@ -155,10 +282,12 @@ def _render_payload(slide, x: float, y: float, w: float, h: float,
                and has_fill)
 
     # ── Base shape ──
-    if is_code or has_fill:
-        shape = slide.shapes.add_shape(1, Pt(x), Pt(y), Pt(w), Pt(h))
-        shape.fill.solid()
-        shape.fill.fore_color.rgb = RGBColor(*p.fill_color) if has_fill else RGBColor(0xF5, 0xF5, 0xF5)
+    shape_type = _lookup_shape(p.shape_id) if p.shape_id else 1  # default = rectangle
+    if is_code or has_fill or p.shape_id:
+        shape = slide.shapes.add_shape(shape_type, Pt(x), Pt(y), Pt(w), Pt(h))
+        if has_fill:
+            shape.fill.solid()
+            shape.fill.fore_color.rgb = RGBColor(*p.fill_color)
         shape.line.fill.background()
         tf = shape.text_frame
     else:
@@ -259,6 +388,7 @@ def classify_shape(shape) -> ContentType:
       PICTURE       → IMAGE
       TABLE         → TABLE
       CHART         → CHART
+      LINE/CONNECTOR → CONNECTOR
       TEXT_BOX      → 有 fill 且无文字 → SHAPE
                      → 有 fill 且有文字 → TEXTBOX
                      → 无 fill 有文字 → TEXT
@@ -282,6 +412,10 @@ def classify_shape(shape) -> ContentType:
     # Chart
     if shape_type == MSO_SHAPE_TYPE.CHART:
         return ContentType.CHART
+
+    # Line / Connector
+    if shape_type in (MSO_SHAPE_TYPE.LINE,):
+        return ContentType.CONNECTOR
 
     # Placeholder / Text Box / Auto Shape
     if shape_type in (MSO_SHAPE_TYPE.TEXT_BOX, MSO_SHAPE_TYPE.PLACEHOLDER,

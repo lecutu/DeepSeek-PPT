@@ -34,6 +34,7 @@ class ContentType(Enum):
     CHART       = "chart"        # 图表
     SHAPE       = "shape"        # 装饰图形（无文字）
     ANNOTATION  = "annotation"   # 标注、批注
+    CONNECTOR   = "connector"    # 箭头/连线（永远 ALLOW，渲染直箭头）
     FOOTER      = "footer"       # 页脚（跨页一致性用）
     TITLE       = "title"        # 标题（层级检测用）
     UNKNOWN     = "unknown"
@@ -113,6 +114,19 @@ class ElementPayload:
     # For IMAGE elements: path to image file + fit mode
     image_path: str = ""                # e.g. "D:/images/fig1.png"
     fit_mode: str = "fit"               # "fit" | "fill" | "crop_center"
+
+    # Shape override — maps to python-pptx MSO_SHAPE presets
+    # "rectangle" | "rounded_rectangle" | "diamond" | "ellipse" | "chevron" |
+    # "pentagon" | "hexagon" | "star5" | "star8" | "triangle" | "right_triangle" |
+    # "right_arrow" | "left_arrow" | "up_arrow" | "down_arrow" | "striped_right_arrow" |
+    # "arc" | "moon" | "parallelogram" | "trapezoid" | "plus" | "bevel"
+    shape_id: str = ""                  # "" = default rectangle (autoShape 1)
+
+    # Connector — from/to grid cell addresses (engine computes center pt)
+    connector_from: str = ""            # "A3"
+    connector_to: str = ""              # "D6"
+    line_color: tuple[int,int,int] = (0x66, 0x66, 0x66)
+    line_width_pt: float = 1.5
 
 
 @dataclass

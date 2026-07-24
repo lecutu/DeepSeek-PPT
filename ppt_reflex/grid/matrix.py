@@ -70,6 +70,9 @@ class InteractionMatrix:
                 continue                          # 背景 — 永远允许重叠
 
             existing_type = cell.content_type or ContentType.UNKNOWN
+            # CONNECTOR always allowed — lines float above everything
+            if existing_type == ContentType.CONNECTOR or new_type == ContentType.CONNECTOR:
+                continue
             verdict = self.judge(existing_type, new_type)
 
             if verdict == Verdict.ALLOW:
