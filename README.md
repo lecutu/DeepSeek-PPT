@@ -12,9 +12,42 @@
 
 ---
 
-## 🎯 Core Idea
+## 🎯 Pipeline at a Glance
 
-> **Agent says cell addresses → Engine checks conflicts in real-time → Passes before writing → Atomic commit, zero corruption**
+```
+Agent picks cells "A2:D5" + payload          ← LLM says where + what
+        │
+        ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                        try_place(cells, payload)                  │
+│                                                                   │
+│  ① bbox position check     → "Q1" invalid? BLOCK                  │
+│  ② text overflow pre-check → estimate_text_size() → WARN if >2pt  │
+│  ③ scan 32×18 info grid    → find occupied cells                  │
+│  ④ collision matrix        → TEXT × TEXT = ❌ BLOCK               │
+│  ⑤ ⚡ engine verdict        → ALLOW / WARN(+fix) / BLOCK(+zone)   │
+│  ⑥ occupy info grid        → store payload in cells               │
+└─────────────────────────────────────┬────────────────────────────┘
+                                      │
+              ALLOW ──────────────────┼────────────────── BLOCK / WARN
+                 │                    │                      │
+                 ▼                    │                      ▼
+  ┌────────────────────────┐         │        ┌──────────────────────────┐
+  │  commit("output.pptx") │         │        │ Agent reads:             │
+  │                        │         │        │ • conflicts detail       │
+  │  grid_to_ppt renders:  │         │        │ • free_suggestion zones  │
+  │  • text / font / color │         │        │ • fix hint (lines/font)  │
+  │  • code blocks (dark)  │         │        │                          │
+  │  • fill backgrounds    │         │        │ → adjusts cells/payload  │
+  │                        │         │        │ → re-calls try_place     │
+  │  Atomic write (tmp →   │         │        └──────────────────────────┘
+  │  os.replace)           │         │
+  └────────────────────────┘         │
+                                     │
+                        ✅ PPT file never touched until ALLOW
+```
+
+> **Agent speaks cell addresses · Engine holds spatial state · Overflow caught before writing · Atomic commit, zero corruption**
 
 ---
 
