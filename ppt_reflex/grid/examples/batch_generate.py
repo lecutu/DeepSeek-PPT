@@ -251,7 +251,7 @@ def make_teaching_slides():
     s = S(); bg_fill(s)
     tx(s, 60, 40, 840, 36, "In-Class Exercise", 26, TI, True)
     tx(s, 80, 120, 800, 80, 'Write a function "compute_statistics(data)" that takes a list of numbers and returns a dict with keys: mean, median, std_dev, min, max.', 16, TX)
-    code_box(s, 60, 230, 840, 160, [
+    code_box(s, 60, 230, 840, 260, [
         "def compute_statistics(data):",
         '    """Return summary statistics for a list of numbers."""',
         "    from statistics import mean, median, stdev",
@@ -263,7 +263,7 @@ def make_teaching_slides():
         '        "max": max(data),',
         "    }",
     ])
-    tx(s, 80, 420, 800, 40, "Time: 10 minutes. Submit via GitHub Classroom.", 14, AC2)
+    tx(s, 80, 510, 800, 40, "Time: 10 minutes. Submit via GitHub Classroom.", 14, AC2)
 
     # Slide 6 — Summary
     s = S(); bg_fill(s)
