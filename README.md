@@ -1,6 +1,6 @@
-# 🧠 PPT Reflex Engine
+# 🧠 DeepSeek PPT Maker
 
-> **Agent 选格子 · 引擎判冲突 · 通过才写 PPT**
+> **用便宜的 DeepSeek API 驱动 AI Agent 制作/修复 PPT — Agent 选格子 · 引擎判冲突 · 通过才写 PPT**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -9,19 +9,19 @@
 [![Claude](https://img.shields.io/badge/Claude-%E2%9C%93-blueviolet)](https://anthropic.com)
 [![OpenAI](https://img.shields.io/badge/OpenAI-%E2%9C%93-00a67e)](https://openai.com)
 
-**PPT Reflex Engine** 是一个让 AI Agent 安全操作 PowerPoint 的框架。不依赖昂贵的 GPT-4o，**DeepSeek 也能跑**。
+**DeepSeek PPT Maker** 是一个让 AI Agent 安全操作 PowerPoint 的开源框架。核心卖点：**不依赖昂贵的 GPT-4o，用 DeepSeek 就能做 PPT**，成本降低 35 倍。
 
 ---
 
 ## 🎯 一句话总结
 
-> 用便宜的 DeepSeek API 驱动 Agent 制作/修复 PPT，双层网格 + 事前拦截 → **PPT 文件从被污染之前就被保护**。
+> **DeepSeek API ($0.004/次) → AI Agent 安全制作专业 PPT → 原子写入，0 次文件污染**
 
 ---
 
-## 🔥 为什么这个项目与众不同？
+## 🔥 DeepSeek PPT Maker vs 传统方案
 
-| | 传统 Agent PPT 方案 | PPT Reflex Engine |
+| | 传统 Agent PPT 方案 | DeepSeek PPT Maker |
 |:--|:--|:--|
 | **价格** | GPT-4o $10/1M output | **DeepSeek ~$0.28/1M (35× 便宜)** |
 | **冲突检测** | 写完了再 audit 👉 事后补救 | **try_place → BLOCK 拦截 👉 事前预防** |
@@ -30,6 +30,20 @@
 | **美观性** | Agent 凭感觉排版 | **WCAG 2.1 对比度 + 溢出检测 + 配色校验** |
 | **图片** | 没有 | **内置 ImagePrompter → Midjourney/DALL·E/SD** |
 | **LLM 支持** | 只绑一个 | **DeepSeek / Claude / OpenAI / 任何 OpenAI-compatible** |
+
+---
+
+## 💰 DeepSeek 成本优势
+
+制作一份 10 页 PPT（预估 15K output tokens）:
+
+| LLM | 单次成本 | 10 次生成 | 1 年 (每周1次) |
+|:--|--:|--:|--:|
+| **DeepSeek-V3** | ~$0.004 | ~$0.04 | ~$2.10 |
+| GPT-4o | ~$0.15 | ~$1.50 | ~$78 |
+| Claude Sonnet | ~$0.23 | ~$2.25 | ~$117 |
+
+> **用 DeepSeek 做一年 PPT 只要 ¥15 块钱。**
 
 ---
 
@@ -73,8 +87,8 @@ ppt_reflex/
 
 ```bash
 pip install python-pptx
-git clone https://github.com/your-org/ppt-reflex-engine.git
-cd ppt-reflex-engine
+git clone https://github.com/lecutu/deepseek-ppt-maker.git
+cd deepseek-ppt-maker
 ```
 
 ### DeepSeek 驱动 PPT 修复
@@ -301,18 +315,6 @@ content_type 取值: TEXT | TEXTBOX | IMAGE | TABLE | CHART | SHAPE | ANNOTATION
 
 ---
 
-## 💰 成本对比
-
-制作一份 10 页 PPT（预估 15K output tokens）:
-
-| LLM | 单次成本 | 10 次生成 | 1 年 (每周1次) |
-|:--|--:|--:|--:|
-| **DeepSeek-V3** | ~$0.004 | ~$0.04 | ~$2.10 |
-| GPT-4o | ~$0.15 | ~$1.50 | ~$78 |
-| Claude Sonnet | ~$0.23 | ~$2.25 | ~$117 |
-
----
-
 ## 🗺️ Roadmap
 
 - [x] 双层网格 (16×9 + 32×18)
@@ -340,4 +342,4 @@ MIT License — 随意使用/修改/商用。PR welcome。
 
 ---
 
-**Agent 选格子 · 引擎判冲突 · 通过才写 PPT。用 DeepSeek 也能做。**
+**DeepSeek API 驱动 · Agent 选格子 · 引擎判冲突 · 通过才写 PPT。35× 比 GPT-4o 便宜。**
