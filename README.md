@@ -1,49 +1,39 @@
 # 🧠 DeepSeek PPT Maker
 
-> **用便宜的 DeepSeek API 驱动 AI Agent 制作/修复 PPT — Agent 选格子 · 引擎判冲突 · 通过才写 PPT**
+> **DeepSeek API 驱动 AI Agent 安全制作/修复 PPT — Agent 选格子 · 引擎判冲突 · 通过才写 PPT**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-59%2F59%20passing-brightgreen.svg)](ppt_reflex/grid/tests/)
 [![DeepSeek](https://img.shields.io/badge/DeepSeek-%E2%9C%93-orange)](https://deepseek.com)
 [![Claude](https://img.shields.io/badge/Claude-%E2%9C%93-blueviolet)](https://anthropic.com)
-[![OpenAI](https://img.shields.io/badge/OpenAI-%E2%9C%93-00a67e)](https://openai.com)
 
-**DeepSeek PPT Maker** 是一个让 AI Agent 安全操作 PowerPoint 的开源框架。核心卖点：**不依赖昂贵的 GPT-4o，用 DeepSeek 就能做 PPT**，成本降低 35 倍。
-
----
-
-## 🎯 一句话总结
-
-> **DeepSeek API ($0.004/次) → AI Agent 安全制作专业 PPT → 原子写入，0 次文件污染**
+**DeepSeek PPT Maker** 是一个让 AI Agent 安全操作 PowerPoint 的开源框架。用 DeepSeek 就能做专业 PPT。
 
 ---
 
-## 🔥 DeepSeek PPT Maker vs 传统方案
+## 🎯 核心能力
 
-| | 传统 Agent PPT 方案 | DeepSeek PPT Maker |
+> **Agent 说 Excel 格子坐标 → 引擎实时判冲突 → 通过才写 PPT → 原子写入，0 次文件污染**
+
+---
+
+## 🔥 为什么需要这个？
+
+| | 普通 Agent PPT 方案 | DeepSeek PPT Maker |
 |:--|:--|:--|
-| **价格** | GPT-4o $10/1M output | **DeepSeek ~$0.28/1M (35× 便宜)** |
-| **冲突检测** | 写完了再 audit 👉 事后补救 | **try_place → BLOCK 拦截 👉 事前预防** |
+| **冲突检测** | 写完了再 audit → 事后补救 | **try_place → BLOCK 拦截 → 事前预防** |
 | **Agent 计算** | Agent 自己算 pt 坐标 | **Agent 说"A2:D5"，引擎翻译** |
 | **PPT 污染** | 写入 3-4 次才能调对 | **原子写入，0 次污染** |
 | **美观性** | Agent 凭感觉排版 | **WCAG 2.1 对比度 + 溢出检测 + 配色校验** |
 | **图片** | 没有 | **内置 ImagePrompter → Midjourney/DALL·E/SD** |
-| **LLM 支持** | 只绑一个 | **DeepSeek / Claude / OpenAI / 任何 OpenAI-compatible** |
+| **LLM 支持** | 只绑一个 | **DeepSeek / Claude / 任何 OpenAI-compatible** |
 
 ---
 
-## 💰 DeepSeek 成本优势
+## 💰 DeepSeek 成本
 
-制作一份 10 页 PPT（预估 15K output tokens）:
-
-| LLM | 单次成本 | 10 次生成 | 1 年 (每周1次) |
-|:--|--:|--:|--:|
-| **DeepSeek-V3** | ~$0.004 | ~$0.04 | ~$2.10 |
-| GPT-4o | ~$0.15 | ~$1.50 | ~$78 |
-| Claude Sonnet | ~$0.23 | ~$2.25 | ~$117 |
-
-> **用 DeepSeek 做一年 PPT 只要 ¥15 块钱。**
+DeepSeek-V3 API 极低的 token 价格（~$0.28/1M output tokens）意味着 AI 制作 PPT 几乎是零成本——单次生成约 $0.004，做一年不超 ¥20。
 
 ---
 
@@ -94,7 +84,6 @@ cd deepseek-ppt-maker
 ### DeepSeek 驱动 PPT 修复
 
 ```bash
-# 用 DeepSeek API 自动检测和修复 broken.pptx
 export DEEPSEEK_API_KEY="sk-your-key"
 python ppt_reflex/llm_agent.py cases/broken.pptx --provider deepseek --max-slides 5
 
@@ -117,32 +106,23 @@ from grid.templates import get_template
 t = get_template("academic").override(accent_hex="E74C3C")
 
 canvas = GridCanvas(GridConfig())
-canvas.load("template.pptx")  # 从已有 PPT 载入布局
+canvas.load("template.pptx")
 
-# Agent 尝试放置元素 — 引擎判冲突
 result = canvas.try_place("body-01", ContentType.TEXT, ["A2", "B2", "A3", "B3"])
 
 if result.allowed:
-    # 通过 → 原子写入 PPT，零污染
     canvas.commit("output.pptx")
 else:
-    # 冲突 → 返回原因 + 空闲区域建议
     print(f"BLOCKED: {result.conflicts}")
     print(f"Try: {result.free_suggestion}")
-    # Agent 调整 → 重试
 ```
 
 ### MCP Server — Agent 直接调用
 
 ```bash
-# 启动 MCP Server，Agent 通过 stdio 协议调用 22 个工具
-python ppt_reflex/mcp_server.py
-
-# 或 HTTP 模式
-python ppt_reflex/mcp_server.py --port 8081
+python ppt_reflex/mcp_server.py             # stdio 模式
+python ppt_reflex/mcp_server.py --port 8081 # HTTP 模式
 ```
-
-Agent 可用工具一览：
 
 | 工具 | 用途 |
 |:--|:--|
@@ -175,13 +155,13 @@ print(r.full_prompt)
 #    and muted brick red accents --ar 16:9 --v 6.1"
 ```
 
-6 种图片类型 × 3 种 AI 工具 (Midjourney / DALL·E / Stable Diffusion) × 6 套模板配色自动匹配。
+6 类型 × 3 工具 (Midjourney / DALL·E / SD) × 6 配色自动匹配。
 
 ---
 
 ## 🏗️ 架构理念
 
-### 双层网格 = 两种语言
+### 双层网格
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -197,9 +177,7 @@ print(r.full_prompt)
 └─────────────────────────────────────────────────────┘
 ```
 
-### 交互矩阵 — Unity Physics2D 级别的碰撞检测
-
-每种元素类型之间的堆叠关系预先定义：
+### 交互矩阵
 
 |  | TEXT | TEXTBOX | IMAGE | TABLE | CHART |
 |:--|:--:|:--:|:--:|:--:|:--:|
@@ -209,9 +187,9 @@ print(r.full_prompt)
 | **TABLE** | ❌ | ✅ | ❌ | ❌ | ❌ |
 | **CHART** | ❌ | ✅ | ❌ | ❌ | ❌ |
 
-只有 8 对真正出问题的组合被拦截，其余全放行。不像大多数方案无脑拦所有重叠。
+只拦 8 对真正冲突的组合，其余全放行。
 
-### try_place — PCB 在线 DRC 级别的实时检测
+### try_place 实时检测
 
 ```
 Agent 说: "body 放 A2:D6"
@@ -221,7 +199,7 @@ Agent 说: "body 放 A2:D6"
   → PlacementResult {verdict, conflicts, z_hint, free_suggestion}
 ```
 
-### 原子写入 — 0 污染保证
+### 原子写入
 
 ```
 try_place → 成功 → 信息层暂存
@@ -242,7 +220,7 @@ try_place → 成功 → 信息层暂存
 | `teaching` | `#FFFDF5` 暖白 | `#2196F3` 蓝 | `#FF9800` 橙 | 12.4:1 | 培训/课程 |
 | `product` | `#1D1D1F` 深灰 | `#6366F1` 紫 | `#8B5CF6` 紫 | 13.8:1 | 品牌/发布 |
 
-自定义颜色一行搞定：
+自定义颜色：
 
 ```python
 from grid.templates import get_template
@@ -251,20 +229,13 @@ t = get_template("academic").override(bg_hex="FAFAFA", accent_hex="E74C3C")
 
 ---
 
-## 🧪 测试 & 验证
+## 🧪 测试
 
 ```bash
-# grid/ 模块 — 34 tests
-python -m pytest ppt_reflex/grid/tests/ -v
-
-# MCP Server — 19 tools 端到端
-python ppt_reflex/test_mcp.py
-
-# 协同 — 6 scenarios
-python ppt_reflex/collab_test.py
-
-# 检测性能验证
-python ppt_reflex/validate.py
+python -m pytest ppt_reflex/grid/tests/ -v   # 34 tests
+python ppt_reflex/test_mcp.py                # 19 tools
+python ppt_reflex/collab_test.py             # 6 scenarios
+python ppt_reflex/validate.py                # 检测性能
 ```
 
 | 测试套件 | 结果 |
@@ -282,7 +253,7 @@ python ppt_reflex/validate.py
 
 ---
 
-## 🔧 Agent Prompt (Claude Code / Cursor / 任意 coding agent)
+## 🔧 Agent Prompt
 
 ```
 你是 PPT 布局员。你使用 Grid Canvas 操作 PPT：
@@ -293,11 +264,11 @@ python ppt_reflex/validate.py
 - commit(ppt_path) 原子写入 PPT
 - rollback() 回滚上次操作
 
-content_type 取值: TEXT | TEXTBOX | IMAGE | TABLE | CHART | SHAPE | ANNOTATION | TITLE
+content_type: TEXT | TEXTBOX | IMAGE | TABLE | CHART | SHAPE | ANNOTATION | TITLE
 
 规则:
 - 定位层用 Excel 命名: "A2:D5" 表示 A2 到 D5 的矩形区域
-- 不可逾越 BLOCK_PAIRS (文字叠文字、文字叠图片等)
+- 不可逾越 BLOCK_PAIRS
 - 背景/深色色块禁止纯黑 (#000)
 - 正文用 #222-#444 深灰区间，字体 ≥ 14pt
 ```
@@ -342,4 +313,4 @@ MIT License — 随意使用/修改/商用。PR welcome。
 
 ---
 
-**DeepSeek API 驱动 · Agent 选格子 · 引擎判冲突 · 通过才写 PPT。35× 比 GPT-4o 便宜。**
+**DeepSeek 驱动 · Agent 选格子 · 引擎判冲突 · 通过才写 PPT。**
