@@ -83,8 +83,32 @@ class InfoCell:
     z_order: int = 0
     locked: bool = False
     source: str = "unknown"   # "template" | "agent" | "human"
+    payload: ElementPayload | None = None   # content to render at commit time
 
-    # 第二版: fill_color, font_color, font_size, border_style, ...
+    @property
+    def has_payload(self) -> bool:
+        return self.payload is not None
+
+
+@dataclass
+class ElementPayload:
+    """Content to render when try_place passes + commit writes PPT.
+
+    Attach this to try_place(element_id, ..., payload=...).
+    grid_to_ppt reads it and applies text/fill/font during serialization.
+    If None, grid_to_ppt writes an empty placeholder (as before).
+    """
+    text: str = ""
+    font_size: float = 14.0          # pt
+    font_color: tuple[int,int,int] = (0x22, 0x22, 0x44)  # dark gray default
+    font_bold: bool = False
+    font_name: str = "Calibri"
+    alignment: str = "LEFT"          # LEFT | CENTER | RIGHT
+    fill_color: tuple[int,int,int] | None = None  # background fill
+    line_spacing: float = 1.15       # 1.0 = single
+
+    # For code boxes / multi-line: number of text lines (for overflow estimation)
+    line_count: int = 1
 
 
 @dataclass

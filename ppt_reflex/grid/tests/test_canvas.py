@@ -72,7 +72,7 @@ def test_out_of_bounds():
     canvas = GridCanvas()
     r = canvas.try_place("s01", ContentType.TEXT, ["Q1"])  # col 16 → off
     assert r.blocked, f"Expected BLOCK for OOB, got {r.verdict}"
-    assert "越界" in r.conflicts[0].detail
+    assert "out of bounds" in r.conflicts[0].detail or "OOB" in str(r.conflicts[0].detail)
     print("[PASS] out_of_bounds → BLOCK")
 
 

@@ -9,7 +9,7 @@ grid/serializer.py — Grid 状态 ↔ PPT 文件（唯一碰 python-pptx 的地
 from __future__ import annotations
 import copy
 
-from .types import GridConfig, ContentType, InfoCell
+from .types import GridConfig, ContentType, InfoCell, ElementPayload
 from .info_grid import InformationGrid
 from .positioning import bbox_to_fine_cells
 
@@ -78,13 +78,23 @@ def ppt_to_grid(ppt_path: str, slide_index: int,
 # ═══════════════════════════════════════════════════════════
 
 def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str) -> None:
-    """将信息层状态写入 PPT 文件。
+    """Write InformationGrid state → PPT file, rendering ElementPayload content.
 
-    遍历所有被占用的元素 → 按 owner_id 聚合 bbox → 写入 pptx。
-    locked 元素坐标不变（模板装饰）。
+    Each occupied element's bbox determines position. If payload is present,
+    text/fill/font/alignment are applied. Without payload, empty placeholder.
+    Multi-line code blocks get dark background + monospace font.
+    locked elements retain position only (template decoration).
     """
     from pptx import Presentation
-    from pptx.util import Pt
+    from pptx.util import Pt, Emu
+    from pptx.dml.color import RGBColor
+    from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+
+    ALIGN_MAP = {
+        "LEFT": PP_ALIGN.LEFT,
+        "CENTER": PP_ALIGN.CENTER,
+        "RIGHT": PP_ALIGN.RIGHT,
+    }
 
     occ = grid.all_occupied()
     if not occ:
@@ -95,7 +105,6 @@ def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str) -> Non
     slide = prs.slides.add_slide(slide_layout)
 
     for owner_id, fine_cells in occ.items():
-        # 聚合 fine_cells 为 bbox
         bbox = _cells_union(fine_cells, grid.config)
         if bbox is None:
             continue
@@ -104,27 +113,82 @@ def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str) -> Non
         content_type = _get_type_for_id(owner_id, fine_cells, grid)
         cell_sample = grid.get_cell(next(iter(fine_cells)))
         locked = cell_sample.locked if cell_sample else False
+        payload = cell_sample.payload if cell_sample else None
 
+        # ── Render with payload if available ──
+        if payload is not None and not locked:
+            _render_payload(slide, x, y, w, h, content_type, payload, ALIGN_MAP)
+            continue
+
+        # ── Fallback: empty placeholder (backward compatible) ──
         if content_type == ContentType.TEXT:
             box = slide.shapes.add_textbox(Pt(x), Pt(y), Pt(w), Pt(h))
             box.text_frame.text = ""
         elif content_type == ContentType.TEXTBOX:
-            box = slide.shapes.add_shape(
-                1, Pt(x), Pt(y), Pt(w), Pt(h)  # MSO_SHAPE.RECTANGLE
-            )
+            box = slide.shapes.add_shape(1, Pt(x), Pt(y), Pt(w), Pt(h))
             box.text_frame.text = ""
         elif content_type == ContentType.IMAGE:
-            box = slide.shapes.add_picture(
-                _placeholder_png(), Pt(x), Pt(y), Pt(w), Pt(h)
-            )
+            slide.shapes.add_picture(_placeholder_png(), Pt(x), Pt(y), Pt(w), Pt(h))
         elif content_type == ContentType.SHAPE:
-            box = slide.shapes.add_shape(
-                1, Pt(x), Pt(y), Pt(w), Pt(h)
-            )
+            slide.shapes.add_shape(1, Pt(x), Pt(y), Pt(w), Pt(h))
         else:
             box = slide.shapes.add_textbox(Pt(x), Pt(y), Pt(w), Pt(h))
+            box.text_frame.text = ""
 
     prs.save(ppt_path)
+
+
+def _render_payload(slide, x: float, y: float, w: float, h: float,
+                    content_type: ContentType, p: ElementPayload,
+                    align_map: dict) -> None:
+    """Render a single element with full payload content."""
+    from pptx.util import Pt
+    from pptx.dml.color import RGBColor
+    from pptx.oxml.ns import qn
+
+    fc = RGBColor(*p.font_color) if p.font_color else RGBColor(0x22, 0x22, 0x44)
+    has_fill = p.fill_color is not None
+    is_code = (p.font_name in ("Consolas", "Courier New", "Source Code Pro", "Roboto Mono")
+               and has_fill)
+
+    # ── Base shape ──
+    if is_code or has_fill:
+        shape = slide.shapes.add_shape(1, Pt(x), Pt(y), Pt(w), Pt(h))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = RGBColor(*p.fill_color) if has_fill else RGBColor(0xF5, 0xF5, 0xF5)
+        shape.line.fill.background()
+        tf = shape.text_frame
+    else:
+        shape = slide.shapes.add_textbox(Pt(x), Pt(y), Pt(w), Pt(h))
+        tf = shape.text_frame
+
+    tf.word_wrap = True
+    tf.auto_size = None  # no auto-shrink; overflow caught by engine pre-check
+
+    # Margins
+    pad = Pt(12) if is_code else Pt(6)
+    tf.margin_left = pad
+    tf.margin_right = pad
+    tf.margin_top = pad
+    tf.margin_bottom = pad
+
+    # ── Text content ──
+    text = p.text.strip()
+    if not text:
+        return
+
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        para.text = line
+        para.font.name = p.font_name
+        para.font.size = Pt(p.font_size)
+        para.font.color.rgb = fc
+        para.font.bold = p.font_bold
+        para.alignment = align_map.get(p.alignment, align_map["LEFT"])
+        para.line_spacing = p.line_spacing
+        para.space_after = Pt(0)
+        para.space_before = Pt(0)
 
 
 # ═══════════════════════════════════════════════════════════

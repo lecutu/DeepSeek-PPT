@@ -12,8 +12,9 @@ from copy import deepcopy
 from .types import (
     GridConfig, ContentType, Verdict, InfoCell,
     Conflict, PlacementResult, LayoutProfile,
+    ElementPayload,
 )
-from .positioning import cells_to_bbox, is_cell_in_bounds, bbox_to_coarse_cells
+from .positioning import cells_to_bbox, is_cell_in_bounds, bbox_to_coarse_cells, bbox_to_fine_cells
 from .info_grid import InformationGrid
 from .matrix import InteractionMatrix
 
@@ -41,14 +42,16 @@ class GridCanvas:
     # ═══════════════════════════════════════════════════════════
 
     def try_place(self, element_id: str, content_type: ContentType,
-                  target_cells: list[str]) -> PlacementResult:
-        """尝试在 target_cells 放入元素。
+                  target_cells: list[str], payload: ElementPayload | None = None) -> PlacementResult:
+        """Try to place an element on target_cells.
 
-        1. 定位层：cells → bbox
-        2. 边界检查：是否越界
-        3. 信息层：获取被覆盖的 cell
-        4. 交互矩阵：逐个判定
-        5. 汇总 + 空闲区域建议
+        1. cells → bbox
+        2. boundary check
+        3. text overflow estimation (if payload provided): expand cells if text overflows
+        4. scan info layer 32×18 grid for occupied cells
+        5. collision matrix: Type × Type → BLOCK / ALLOW / WARN
+        6. aggregate + free-zone suggestion
+        7. if ALLOW: occupy info layer WITH payload stored
         """
         if not target_cells:
             return PlacementResult(
@@ -84,9 +87,44 @@ class GridCanvas:
                     existing_type=ContentType.UNKNOWN,
                     new_type=content_type,
                     verdict=Verdict.BLOCK,
-                    detail=f"越界: {', '.join(oob_cells[:5])}",
+                    detail=f"out of bounds: {', '.join(oob_cells[:5])}",
                 )],
             )
+
+        # ②.⑤ 文字溢出预检（有 payload 时）
+        if payload is not None and payload.text.strip():
+            from .text_metrics import estimate_text_size
+            overflow_x, overflow_y, rendered_w, rendered_h = estimate_text_size(
+                payload.text,
+                font_pt=payload.font_size,
+                line_spacing=payload.line_spacing,
+                box_width_pt=w,
+                box_height_pt=h,
+                word_wrap=True,
+            )
+            if overflow_y > 2:  # >2pt tolerance
+                # Text overflows vertically — return WARN with suggestion
+                excess_lines = int(overflow_y / (payload.font_size * payload.line_spacing)) + 1
+                total_lines = payload.text.count("\n") + 1
+                max_fit = max(1, total_lines - excess_lines)
+                return PlacementResult(
+                    verdict=Verdict.WARN,
+                    warnings=[Conflict(
+                        cell_addr=target_cells[0],
+                        existing_id="",
+                        new_id=element_id,
+                        existing_type=ContentType.UNKNOWN,
+                        new_type=content_type,
+                        verdict=Verdict.WARN,
+                        detail=(
+                            f"text overflow: needs {rendered_h:.0f}pt, box is {h:.0f}pt, "
+                            f"excess {overflow_y:.0f}pt. "
+                            f"Fix: reduce to {max_fit} lines, "
+                            f"or decrease font, "
+                            f"or expand grid area."
+                        ),
+                    )],
+                )
 
         # ③ 信息层
         covered = self.info_grid.cells_in_bbox(x, y, w, h)
@@ -103,6 +141,7 @@ class GridCanvas:
                 fine_addrs, element_id, content_type,
                 z_order=z,
                 source="agent",
+                payload=payload,   # store content for commit-time rendering
             )
             # z_hint — 即使是 ALLOW，也可能有建议
             z_hint = self._compute_z_hint(covered, content_type)
