@@ -257,15 +257,17 @@ def _render_connector(slide, payload: "ElementPayload", config: "GridConfig") ->
 
     # Arrowhead at target end
     from pptx.oxml.ns import qn
-    ln = connector._element.find(qn('a:ln'))
-    if ln is not None:
-        tail = ln.find(qn('a:tailEnd'))
-        if tail is None:
-            from lxml import etree
-            tail = etree.SubElement(ln, qn('a:tailEnd'))
-        tail.set('type', 'triangle')
-        tail.set('w', 'med')
-        tail.set('len', 'med')
+    spPr = connector._element.find(qn('p:spPr'))
+    if spPr is not None:
+        ln = spPr.find(qn('a:ln'))
+        if ln is not None:
+            tail = ln.find(qn('a:tailEnd'))
+            if tail is None:
+                from lxml import etree
+                tail = etree.SubElement(ln, qn('a:tailEnd'))
+            tail.set('type', 'triangle')
+            tail.set('w', 'med')
+            tail.set('len', 'med')
 
 
 def _render_payload(slide, x: float, y: float, w: float, h: float,
