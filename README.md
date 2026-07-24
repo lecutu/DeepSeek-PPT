@@ -18,16 +18,16 @@
 
 ---
 
-## 🔥 为什么需要这个？
+## 🔥 解决的问题
 
-| | 普通 Agent PPT 方案 | DeepSeek PPT Maker |
-|:--|:--|:--|
-| **冲突检测** | 写完了再 audit → 事后补救 | **try_place → BLOCK 拦截 → 事前预防** |
-| **Agent 计算** | Agent 自己算 pt 坐标 | **Agent 说"A2:D5"，引擎翻译** |
-| **PPT 污染** | 写入 3-4 次才能调对 | **原子写入，0 次污染** |
-| **美观性** | Agent 凭感觉排版 | **WCAG 2.1 对比度 + 溢出检测 + 配色校验** |
-| **图片** | 没有 | **内置 ImagePrompter → Midjourney/DALL·E/SD** |
-| **LLM 支持** | 只绑一个 | **DeepSeek / Claude / 任何 OpenAI-compatible** |
+让 AI Agent 操作 PPT 面临几个固有难题：
+
+- **冲突检测** — 元素堆叠/越界 → `try_place` 事前拦截，引擎实时判冲突，通过才写入
+- **坐标计算** — Agent 不擅长 pt 坐标计算 → 格子地址（如 `A2:D5`），引擎自动翻译为精确坐标
+- **文件污染** — 传统 Agent 反复试错修改 PPT 文件 → 原子写入，失败自动 rollback，文件零污染
+- **美观性** — Agent 无审美判断力 → WCAG 2.1 对比度校验 + 文字溢出检测 + 配色合规检查
+- **图片** — Agent 不会做图 → 内置 ImagePrompter，自动生成 Midjourney/DALL·E/SD 提示词
+- **模型绑定** — 绑定单一 LLM → 支持 DeepSeek / Claude / 任何 OpenAI-compatible 接口
 
 ---
 
