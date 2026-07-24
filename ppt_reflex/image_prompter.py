@@ -1,24 +1,24 @@
 """
-ppt_reflex/image_prompter.py — 图片 AI 提示词生成器
+ppt_reflex/image_prompter.py — AI image prompt generator
 
-用法:
+Usage:
   from image_prompter import ImagePrompter
   p = ImagePrompter()
-  prompt = p.generate("锂离子电池充放电原理示意图", style="scientific_diagram", template="academic")
+  prompt = p.generate("Li-ion battery charge-discharge mechanism", style="scientific_diagram", template="academic")
 
-输出: 优化过的 AI 图片生成提示词 (Midjourney / DALL·E / SD 通用)
+Output: optimized AI image generation prompts (Midjourney / DALL·E / SD compatible)
 """
 
 from __future__ import annotations
 from dataclasses import dataclass, field
 
 # ═══════════════════════════════════════════════════════════
-# 图片类型 × 提示词模板
+# Image type × prompt template
 # ═══════════════════════════════════════════════════════════
 
 IMAGE_TYPES = {
     "scientific_diagram": {
-        "label": "科学示意图",
+        "label": "Scientific Diagram",
         "style_keywords": [
             "clean scientific illustration", "technical diagram",
             "white background", "vector style", "clear labels",
@@ -31,7 +31,7 @@ IMAGE_TYPES = {
         "aspect": "16:9",
     },
     "experiment_photo": {
-        "label": "实验照片/设备",
+        "label": "Experiment Photo/Equipment",
         "style_keywords": [
             "laboratory photography", "clean lighting",
             "professional scientific equipment", "sharp focus",
@@ -44,7 +44,7 @@ IMAGE_TYPES = {
         "aspect": "4:3",
     },
     "data_chart": {
-        "label": "数据图表",
+        "label": "Data Chart",
         "style_keywords": [
             "clean data visualization", "flat design",
             "minimalist chart", "information graphic",
@@ -57,7 +57,7 @@ IMAGE_TYPES = {
         "aspect": "16:9",
     },
     "concept_illustration": {
-        "label": "概念插图",
+        "label": "Concept Illustration",
         "style_keywords": [
             "abstract concept illustration", "flat vector art",
             "minimalist design", "professional presentation",
@@ -70,7 +70,7 @@ IMAGE_TYPES = {
         "aspect": "16:9",
     },
     "material_structure": {
-        "label": "材料结构图",
+        "label": "Material Structure",
         "style_keywords": [
             "molecular structure", "material science illustration",
             "atomic arrangement", "scientific visualization",
@@ -84,7 +84,7 @@ IMAGE_TYPES = {
         "aspect": "1:1",
     },
     "hero_image": {
-        "label": "封面/主视觉",
+        "label": "Hero Image / Cover",
         "style_keywords": [
             "professional presentation hero image", "modern design",
             "abstract technology background", "clean geometric",
@@ -99,7 +99,7 @@ IMAGE_TYPES = {
 }
 
 # ═══════════════════════════════════════════════════════════
-# 模板配色 → 图片色调建议
+# Template palette → image color hints
 # ═══════════════════════════════════════════════════════════
 
 TEMPLATE_PALETTE_HINTS = {
@@ -216,7 +216,7 @@ class ImagePrompter:
             provider=provider,
             full_prompt=full,
             negative_prompt=neg_full,
-            style_notes=f"类型: {type_cfg['label']} | 色调: {palette['hint']}",
+            style_notes=f"Type: {type_cfg['label']} | Palette: {palette['hint']}",
             suggested_provider=self._suggest_provider(image_type),
         )
 
@@ -225,7 +225,7 @@ class ImagePrompter:
         subjects: list[dict],
         provider: str = "midjourney",
     ) -> list[ImagePrompt]:
-        """批量生成提示词. subjects=[{"subject":"...", "type":"scientific_diagram"}, ...]"""
+        """Batch generate prompts. subjects=[{"subject":"...", "type":"scientific_diagram"}, ...]"""
         return [
             self.generate(
                 s.get("subject", ""),
@@ -285,42 +285,42 @@ class ImagePrompter:
 
 
 # ═══════════════════════════════════════════════════════════
-# Agent 用的引导问卷
+# Mandatory pre-generation questionnaire for Agent
 # ═══════════════════════════════════════════════════════════
 
 MAKER_QUESTIONNAIRE = """
-# PPT 制作 — 启动问卷
+# PPT Maker — Startup Questionnaire
 
-每次制作 PPT 前必须收集以下信息（不得跳过）：
+The following information MUST be collected before every PPT generation (no skipping):
 
-## 必答问题
+## Required Questions
 
-1. **做什么**: PPT 的主题/目的/场合?
-   - 示例: "组会汇报 SiOC 阳极进展" / "开题答辩" / "年终总结"
-   - 场景: academic | business | teaching | product
+1. **What to make**: Topic / purpose / occasion?
+   - Example: "Group meeting report on SiOC anode progress" / "Thesis defense" / "Annual summary"
+   - Scene: academic | business | teaching | product
 
-2. **内容**: 有哪些内容?
-   - 文字内容、数据表格、已有图片、参考文献
-   - 需要几张幻灯片? 预期时长?
+2. **Content**: What content do you have?
+   - Text, data tables, existing images, references
+   - How many slides? Expected duration?
 
-3. **图片需求** (如果不需要图片，明确说明):
-   - 哪些幻灯片需要图片?
-   - 每张图类型: 科学示意图/实验照片/数据图表/概念插图/材料结构/封面主视觉
-   - 自己提供图片文件? 还是需要 AI 生成?
+3. **Image needs** (explicitly say "none" if not needed):
+   - Which slides need images?
+   - Image type for each: scientific_diagram / experiment_photo / data_chart / concept_illustration / material_structure / hero_image
+   - Do you have image files to use, or need AI to generate them?
 
-4. **模板偏好**: 用哪套配色?
-   - academic(学术) / business(商务) / minimal(极简) / data_report(数据) / teaching(教学) / product(产品)
-   - 自定义颜色? (需要提供 hex)
+4. **Template preference**: Which color theme?
+   - academic / business / minimal / data_report / teaching / product
+   - Custom colors? (provide hex codes)
 
-## 处理流程
+## Workflow
 
 ```
-用户回答 → 确认计划 → 有图片需求?
-  ├─ 用户提供图片文件 → 直接使用
-  ├─ 需要 AI 生成 → ImagePrompter 生成提示词 → 用户去生成
-  └─ 无图片需求 → 跳过
+User answers → confirm plan → image needs?
+  ├─ User provides image files → use directly
+  ├─ Needs AI generation → ImagePrompter generates prompts → user fetches images
+  └─ No images needed → skip
 
-  → 生成 PPT (grid/ engine) → 输出到 temp 目录 → 用户检查
+  → Generate PPT (grid/ engine) → output to temp dir → user reviews
 ```
 """
 
@@ -330,17 +330,17 @@ if __name__ == "__main__":
     p = ImagePrompter(template="academic")
 
     tests = [
-        ("SiOC 负极材料充放电机理示意图", "scientific_diagram", "midjourney"),
-        ("POSS 笼状结构热解 SiOC 转变过程", "material_structure", "midjourney"),
-        ("锂离子电池半电池测试装置照片", "experiment_photo", "midjourney"),
-        ("SiOC/Graphene 复合气凝胶 3D 结构", "concept_illustration", "dalle"),
+        ("SiOC anode charge-discharge mechanism diagram", "scientific_diagram", "midjourney"),
+        ("POSS cage structure pyrolysis to SiOC transformation", "material_structure", "midjourney"),
+        ("Li-ion half-cell testing setup photo", "experiment_photo", "midjourney"),
+        ("SiOC/Graphene composite aerogel 3D structure", "concept_illustration", "dalle"),
     ]
 
     for subject, itype, prov in tests:
         r = p.generate(subject, itype, prov)
         print(f"\n{'='*70}")
-        print(f"类型: {r.type} | 模板: {r.template} | 建议工具: {r.suggested_provider}")
-        print(f"主体: {r.subject}")
-        print(f"完整提示词:")
+        print(f"Type: {r.type} | Template: {r.template} | Suggested: {r.suggested_provider}")
+        print(f"Subject: {r.subject}")
+        print(f"Full prompt:")
         print(f"  {r.full_prompt}")
-        print(f"负面提示词: {r.negative_prompt[:120]}...")
+        print(f"Negative: {r.negative_prompt[:120]}...")
