@@ -4,7 +4,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-59%2F59%20passing-brightgreen.svg)](ppt_reflex/grid/tests/)
+[![Tests](https://img.shields.io/badge/tests-54%2F54%20passing-brightgreen.svg)](ppt_reflex/grid/tests/)
 [![DeepSeek](https://img.shields.io/badge/DeepSeek-%E2%9C%93-orange)](https://deepseek.com)
 [![Claude](https://img.shields.io/badge/Claude-%E2%9C%93-blueviolet)](https://anthropic.com)
 
@@ -20,10 +20,17 @@
 
 ## 🔥 Problems Solved
 
-AI agents face several inherent challenges when manipulating PowerPoint:
+When DeepSeek (or any LLM) generates `python-pptx` code directly, three fundamental flaws emerge:
+
+- **Element overlap** — the LLM outputs raw coordinates without knowing which regions are already occupied. Two text boxes land on the same spot, an image buries a caption. The code "writes" fine — the result is garbage.
+- **No spatial awareness** — the LLM sees `(x=120, y=240)` as numbers, not "the left body area below the title." Without a spatial vocabulary, it cannot reason about layout at all.
+- **No inter-element awareness** — the LLM generates each shape independently. Slide-level state is invisible to code generation — there is no way to know "there's already a chart here, move the caption elsewhere."
+
+**DeepSeek PPT Maker** solves these at the engine level, before any file is touched:
 
 - **Collision detection** — overlapping/overflowing elements → `try_place` pre-emptive blocking, engine judges in real-time before writing
 - **Coordinate math** — agents struggle with pt coordinates → grid-address system (e.g. `A2:D5`), engine translates to precise positions
+- **Element relationship awareness** — dual-layer 32×18 info grid tracks every occupied cell by `owner_id` + `content_type` + `z_order`, so the engine knows exactly who is where before accepting a placement
 - **File corruption** — agents retry and overwrite repeatedly → atomic commit with auto-rollback on failure, zero file pollution
 - **Aesthetics** — agents have no visual judgment → WCAG 2.1 contrast check + text overflow detection + palette compliance
 - **Images** — agents can't generate visuals → built-in ImagePrompter auto-generates Midjourney/DALL·E/SD prompts
@@ -189,15 +196,19 @@ print(r.full_prompt)
 
 Only 8 truly problematic pairs are blocked. Everything else passes.
 
-### try_place — Real-Time Conflict Detection
+### try_place — Real-Time Spatial Awareness
+
+When raw LLM code runs `slide.shapes.add_textbox(x=120, y=240, ...)`, it writes blindly — no knowledge of what's already there. `try_place` gives the engine spatial awareness before any element lands:
 
 ```
 Agent says: "body at A2:D6"
   → cells_to_bbox → bbox boundary check
-  → scan info layer 32×18 grid
+  → scan info layer 32×18 grid (every occupied cell tracked)
   → collision matrix: TEXT on TEXT? → BLOCK
   → PlacementResult {verdict, conflicts, z_hint, free_suggestion}
 ```
+
+The engine sees every element's footprint, content type, and z-order — as a real-time perceptive map. No blind writes.
 
 ### Atomic Writes
 
