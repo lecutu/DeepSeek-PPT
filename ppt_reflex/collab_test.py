@@ -1,13 +1,13 @@
 """
-Day 1.5 人机协同验证 — 纯 Python 模拟
+Day 1.5 人机协同验证 -- 纯 Python 模拟
 
 验证：
-  1. Revision 乐观锁：Agent 基于过期状态操作 → 拒绝 + STATE_CHANGED
-  2. 元素锁定：人锁定的元素 → Agent 移动被拒
-  3. 事务冲突：Agent 事务中 → 人插入修改 → 回滚
-  4. 人工编辑感知：人修改后 → audit 检测到新引入问题
+  1. Revision 乐观锁：Agent 基于过期状态操作 -> 拒绝 + STATE_CHANGED
+  2. 元素锁定：人锁定的元素 -> Agent 移动被拒
+  3. 事务冲突：Agent 事务中 -> 人插入修改 -> 回滚
+  4. 人工编辑感知：人修改后 -> audit 检测到新引入问题
   5. 连续操作：正常流转，revision 单调递增
-  6. 人解锁后 → Agent 正常操作
+  6. 人解锁后 -> Agent 正常操作
 """
 
 from reflex import ReflexEngine
@@ -38,7 +38,7 @@ def make_slide():
 
 
 def print_step(n, desc):
-    print(f"\n{'─'*60}")
+    print(f"\n{'-'*60}")
     print(f"STEP {n}: {desc}")
 
 
@@ -80,7 +80,7 @@ def test_1_normal_flow():
     old_x = elem.bbox.x
     new_bbox = BBox(old_x + 50, elem.bbox.y, elem.bbox.w, elem.bbox.h)
 
-    print_step(2, f"Agent moves shape-01: x {old_x:.0f} → {old_x+50:.0f}")
+    print_step(2, f"Agent moves shape-01: x {old_x:.0f} -> {old_x+50:.0f}")
     result = eng.move_element("shape-01", new_bbox, expected_revision=rev, source="agent")
     print_result("Result", result)
     rev = result["revision"]
@@ -90,26 +90,26 @@ def test_1_normal_flow():
     # Agent does another move
     elem = eng.get_element("shape-02")
     new_bbox_2 = BBox(420, 100, elem.bbox.w, elem.bbox.h)
-    print_step(3, f"Agent moves shape-02: y {elem.bbox.y:.0f} → 100")
+    print_step(3, f"Agent moves shape-02: y {elem.bbox.y:.0f} -> 100")
     result = eng.move_element("shape-02", new_bbox_2, expected_revision=rev, source="agent")
     print_result("Result", result)
     rev2 = result["revision"]
     assert rev2 == 2, f"Expected rev 2, got {rev2}"
     assert rev2 > rev, "Revision should be monotonically increasing"
 
-    print("\n  ✓ PASSED: Normal flow, revision 0→1→2")
+    print("\n  [PASS] PASSED: Normal flow, revision 0->1->2")
 
     # Verify journal entries
     entries = eng.journal.get_entries_since(0)
     assert len(entries) == 2, f"Expected 2 journal entries, got {len(entries)}"
     for e in entries:
         assert e.source == "agent", f"Expected source=agent, got {e.source}"
-    print(f"  ✓ Journal has 2 entries, both from agent")
+    print(f"  [PASS] Journal has 2 entries, both from agent")
 
 
 def test_2_revision_conflict():
-    """场景 2: 人修改后 Agent 基于旧 revision 操作 → 冲突拒绝。"""
-    print_separator("SCENARIO 2: Revision 乐观锁 — 人改后 Agent 用旧 rev 操作")
+    """场景 2: 人修改后 Agent 基于旧 revision 操作 -> 冲突拒绝。"""
+    print_separator("SCENARIO 2: Revision 乐观锁 -- 人改后 Agent 用旧 rev 操作")
 
     eng = make_slide()
     rev = 0
@@ -123,7 +123,7 @@ def test_2_revision_conflict():
     human_new_bbox = BBox(100, 200, elem.bbox.w, elem.bbox.h)
     eng.notify_human_edit("shape-01", human_new_bbox)
     new_rev = eng.journal.last_revision()
-    print(f"  Human edit → revision bumped to {new_rev}")
+    print(f"  Human edit -> revision bumped to {new_rev}")
     assert new_rev == 1, f"Expected rev 1 after human edit, got {new_rev}"
 
     # Agent 仍基于旧 rev=0 尝试操作
@@ -135,7 +135,7 @@ def test_2_revision_conflict():
 
     assert result["status"] == "state_changed", f"Expected state_changed, got {result['status']}"
     assert "Expected rev 0" in result.get("message", ""), f"Wrong message: {result.get('message')}"
-    print("  ✓ PASSED: Agent operation rejected — STATE_CHANGED")
+    print("  [PASS] PASSED: Agent operation rejected -- STATE_CHANGED")
 
     # Agent 重读状态后再操作
     print_step(4, "Agent re-reads state, then retries with correct revision")
@@ -147,12 +147,12 @@ def test_2_revision_conflict():
     print_result("After retry", result)
     assert result["status"] in ("ok", "needs_decision"), f"Expected ok after retry, got {result['status']}"
 
-    print("  ✓ PASSED: Conflict detected + Agent re-reads + succeeds")
+    print("  [PASS] PASSED: Conflict detected + Agent re-reads + succeeds")
 
 
 def test_3_element_locking():
-    """场景 3: 人锁定元素 → Agent 无法移动。"""
-    print_separator("SCENARIO 3: 元素锁定 — 人锁定的元素 Agent 无法碰")
+    """场景 3: 人锁定元素 -> Agent 无法移动。"""
+    print_separator("SCENARIO 3: 元素锁定 -- 人锁定的元素 Agent 无法碰")
 
     eng = make_slide()
 
@@ -172,16 +172,16 @@ def test_3_element_locking():
 
     assert result["status"] == "blocked", f"Expected blocked, got {result['status']}"
     assert "locked" in result.get("message", "").lower(), f"Expected lock message, got: {result.get('message')}"
-    print("  ✓ PASSED: Locked element blocked Agent move")
+    print("  [PASS] PASSED: Locked element blocked Agent move")
 
     # Agent 仍然可以操作未锁定的元素
-    print_step(3, "Agent moves unlocked shape-02 — should succeed")
+    print_step(3, "Agent moves unlocked shape-02 -- should succeed")
     elem2 = eng.get_element("shape-02")
     new_bbox_2 = BBox(elem2.bbox.x + 20, elem2.bbox.y, elem2.bbox.w, elem2.bbox.h)
     result = eng.move_element("shape-02", new_bbox_2, source="agent")
     print_result("Result", result)
     assert result["status"] in ("ok", "needs_decision"), f"Expected ok, got {result['status']}"
-    print("  ✓ PASSED: Unlocked element still works")
+    print("  [PASS] PASSED: Unlocked element still works")
 
     # 人解锁后 Agent 可以操作
     print_step(4, "Human unlocks shape-01, Agent retries")
@@ -189,12 +189,12 @@ def test_3_element_locking():
     result = eng.move_element("shape-01", new_bbox, source="agent")
     print_result("After unlock", result)
     assert result["status"] in ("ok", "needs_decision"), f"Expected ok after unlock, got {result['status']}"
-    print("  ✓ PASSED: Unlock restores Agent access")
+    print("  [PASS] PASSED: Unlock restores Agent access")
 
 
 def test_4_transaction_conflict():
-    """场景 4: Agent 事务中 → 人插入修改 → 事务回滚。"""
-    print_separator("SCENARIO 4: 事务冲突 — 人插入修改导致 Agent 事务回滚")
+    """场景 4: Agent 事务中 -> 人插入修改 -> 事务回滚。"""
+    print_separator("SCENARIO 4: 事务冲突 -- 人插入修改导致 Agent 事务回滚")
 
     eng = make_slide()
     rev = eng.journal.last_revision()
@@ -207,27 +207,27 @@ def test_4_transaction_conflict():
     # Agent 移动 shape-01
     elem = eng.get_element("shape-01")
     eng.move_element("shape-01", BBox(50, 150, elem.bbox.w, elem.bbox.h), source="agent")
-    print(f"  Agent moved shape-01 → rev={eng.journal.last_revision()}")
+    print(f"  Agent moved shape-01 -> rev={eng.journal.last_revision()}")
 
     # Agent 移动 shape-02
     elem2 = eng.get_element("shape-02")
     eng.move_element("shape-02", BBox(500, 150, elem2.bbox.w, elem2.bbox.h), source="agent")
-    print(f"  Agent moved shape-02 → rev={eng.journal.last_revision()}")
+    print(f"  Agent moved shape-02 -> rev={eng.journal.last_revision()}")
 
     # 人插入修改
     print_step(3, "Human modifies shape-01 mid-transaction")
     eng.notify_human_edit("shape-01", BBox(200, 200, 300, 200))
-    print(f"  Human edit → rev={eng.journal.last_revision()}")
+    print(f"  Human edit -> rev={eng.journal.last_revision()}")
 
-    # Agent 尝试提交 — 但人已改过状态 → 应回滚
-    print_step(4, "Agent detects external change → rollback")
+    # Agent 尝试提交 -- 但人已改过状态 -> 应回滚
+    print_step(4, "Agent detects external change -> rollback")
     reversed_ops = eng.rollback()
     print(f"  Rolled back {len(reversed_ops)} operations")
     for op in reversed_ops:
         print(f"    op={op['operation_id']} element={op['element_id']} restored to {op['after_inverse']}")
 
     current_rev = eng.journal.last_revision()
-    print(f"  After rollback → rev={current_rev}")
+    print(f"  After rollback -> rev={current_rev}")
 
     # 验证回滚后状态：
     # journal.rollback() 回滚了 agent 条目，保留了 human 条目。
@@ -239,11 +239,11 @@ def test_4_transaction_conflict():
     assert abs(elem_after.bbox.x - 200) < 5, f"Expected x≈200 (human edit), got {elem_after.bbox.x}"
     assert abs(elem_after.bbox.y - 200) < 5, f"Expected y≈200 (human edit), got {elem_after.bbox.y}"
 
-    print("  ✓ PASSED: Transaction rolled back, human edit preserved")
+    print("  [PASS] PASSED: Transaction rolled back, human edit preserved")
 
 
 def test_5_human_edit_introduces_issue():
-    """场景 5: 人修改后 audit → 发现新问题。"""
+    """场景 5: 人修改后 audit -> 发现新问题。"""
     print_separator("SCENARIO 5: 感知人工编辑引入的问题")
 
     eng = make_slide()
@@ -254,7 +254,7 @@ def test_5_human_edit_introduces_issue():
     print_result("Before", result)
     initial_issues = len(result.get("issues", []))
 
-    # 人把 shape-01 拖到 shape-02 上面 → 制造碰撞
+    # 人把 shape-01 拖到 shape-02 上面 -> 制造碰撞
     print_step(2, "Human drags shape-01 on top of shape-02")
     eng.notify_human_edit("shape-01", BBox(480, 140, 400, 300))
 
@@ -279,21 +279,21 @@ def test_5_human_edit_introduces_issue():
     entries = eng.journal.get_entries_since(0)
     human_entries = [e for e in entries if e.source == "human"]
     assert len(human_entries) >= 2, f"Expected ≥2 human entries, got {len(human_entries)}"
-    print(f"  ✓ Journal has {len(human_entries)} human entries")
+    print(f"  [PASS] Journal has {len(human_entries)} human entries")
 
-    # 后面的 audit → revision 继续递增
+    # 后面的 audit -> revision 继续递增
     print_step(5, "Agent resolves one issue (moves title back)")
     result = eng.move_element("shape-00", BBox(36, 36, 600, 80),
                               expected_revision=eng.journal.last_revision(), source="agent")
     print_result("After fix", result)
     assert result["status"] in ("ok", "needs_decision"), f"Expected ok, got {result['status']}"
 
-    print("  ✓ PASSED: Human edits detected + new issues surfaced + Agent fixes on top")
+    print("  [PASS] PASSED: Human edits detected + new issues surfaced + Agent fixes on top")
 
 
 def test_6_full_workflow():
     """场景 6: 完整人机协同流程。"""
-    print_separator("SCENARIO 6: 完整协同流程 — 交互式模式")
+    print_separator("SCENARIO 6: 完整协同流程 -- 交互式模式")
 
     eng = make_slide()
     history = []  # simulated interaction log
@@ -322,17 +322,17 @@ def test_6_full_workflow():
     log("human_nudge", {"element": "shape-02", "reason": "图片与文字间距太紧",
                         "revision": human_rev})
 
-    # 人锁定标题——不要动我的标题
+    # 人锁定标题----不要动我的标题
     eng.lock_element("shape-00", locked_by="human")
     log("human_lock", {"element": "shape-00"})
 
-    # Phase 3: Agent 审计 → 发现问题
+    # Phase 3: Agent 审计 -> 发现问题
     print_step(3, "Phase 3: Agent audits after human changes")
     result = eng.audit()
     issues = result.get("issues", [])
     log("agent_audit", {"issues": len(issues), "revision": eng.journal.last_revision()})
 
-    # Phase 4: Agent 尝试修复——碰标题被拒
+    # Phase 4: Agent 尝试修复----碰标题被拒
     print_step(4, "Phase 4: Agent tries to fix alignment")
     title = eng.get_element("shape-00")
     # Agent 不知道人被锁了标题
@@ -342,7 +342,7 @@ def test_6_full_workflow():
     log("agent_move_blocked", {"element": "shape-00", "status": result["status"],
                                "reason": result.get("message", "")})
 
-    # Phase 5: Agent 重新读取状态 → 发现标题已锁定 → 调整策略
+    # Phase 5: Agent 重新读取状态 -> 发现标题已锁定 -> 调整策略
     print_step(5, "Phase 5: Agent re-reads state, adapts")
     ctx = eng.local_context(["shape-00", "shape-01", "shape-02"])
     locked = [t for t in ctx["targets"] if t.get("locked")]
@@ -385,7 +385,7 @@ def test_6_full_workflow():
     assert title_after.locked == True
     assert title_after.locked_by == "human"
 
-    print("  ✓ PASSED: Full workflow complete — human+agent collaboration verified")
+    print("  [PASS] PASSED: Full workflow complete -- human+agent collaboration verified")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -410,15 +410,15 @@ if __name__ == "__main__":
             passed += 1
         except AssertionError as e:
             failed += 1
-            print(f"\n  ✗ FAILED [{name}]: {e}")
+            print(f"\n  [FAIL] FAILED [{name}]: {e}")
         except Exception as e:
             failed += 1
-            print(f"\n  ✗ ERROR [{name}]: {type(e).__name__}: {e}")
+            print(f"\n  [FAIL] ERROR [{name}]: {type(e).__name__}: {e}")
 
     print(f"\n{'='*70}")
     print(f"RESULTS: {passed}/{passed+failed} passed")
     if failed == 0:
-        print(f"  ✓ All 6 collaborative scenarios verified")
+        print(f"  [PASS] All 6 collaborative scenarios verified")
     else:
-        print(f"  ✗ {failed} scenario(s) need fixing")
+        print(f"  [FAIL] {failed} scenario(s) need fixing")
     print(f"{'='*70}")

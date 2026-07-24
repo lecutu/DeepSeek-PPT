@@ -70,10 +70,10 @@ def enrich_roles(elements: list[SlideElement], slide_idx: int):
                 e.content_role = ContentRole.BODY
 
     elif slide_idx == 13:  # Slide 14: z-order issue
-        # body then blocking shape — both default to BODY → collision detected
+        # body then blocking shape -- both default to BODY -> collision detected
         pass
 
-    elif slide_idx == 14:  # Slide 15: fix one → cause another
+    elif slide_idx == 14:  # Slide 15: fix one -> cause another
         for e in elements:
             e.content_role = ContentRole.BODY
 
@@ -85,7 +85,7 @@ EXPECTED_ISSUES = {
     0: ["OUT_OF_BOUNDS"],                                    # slide 1: 越界
     1: ["UNEXPECTED_OVERLAP", "FONT_BELOW_THRESHOLD"],       # slide 2: 标题-正文重叠 + 小字号
     2: ["UNEXPECTED_OVERLAP", "ALIGNMENT_DRIFT"],             # slide 3: 两正文重叠 + 对齐偏差
-    3: [],                                                    # slide 4: 图注覆盖图片 → ALLOWED (no issue expected)
+    3: [],                                                    # slide 4: 图注覆盖图片 -> ALLOWED (no issue expected)
     4: ["OUT_OF_BOUNDS"],                                     # slide 5: 边距不足
     5: ["ALIGNMENT_DRIFT"],                                   # slide 6: 对齐偏差
     6: ["SPACING_DEVIATION"],                                  # slide 7: 间距不均
@@ -94,7 +94,7 @@ EXPECTED_ISSUES = {
     9: [],                                                    # slide 10: 疑似溢出 (Day 1: no font metrics yet)
     10: ["UNEXPECTED_OVERLAP"],                                # slide 11: 页脚覆盖内容
     11: ["DENSITY_HIGH"],                                      # slide 12: 密度过高
-    12: [],                                                    # slide 13: 合法背景覆盖 → no issue expected
+    12: [],                                                    # slide 13: 合法背景覆盖 -> no issue expected
     13: ["UNEXPECTED_OVERLAP", "ALIGNMENT_DRIFT"],             # slide 14: z-order遮挡 + 对齐
     14: ["UNEXPECTED_OVERLAP", "ALIGNMENT_DRIFT"],             # slide 15: 正文重叠 + 对齐偏差
 }
@@ -111,20 +111,20 @@ def evaluate(input_path: str, output_path: str | None = None):
     total_slides = len(prs.slides)
 
     # Metrics
-    all_issues_found = {}   # slide_idx → list of issue codes
+    all_issues_found = {}   # slide_idx -> list of issue codes
     all_issues_after = {}
     auto_fix_counts = []
     token_estimates = []    # estimated JSON size for Agent input
 
     print("=" * 70)
-    print(f"PPT Reflex Engine — Day 1 Validation")
+    print(f"PPT Reflex Engine -- Day 1 Validation")
     print(f"Input:  {input_path}")
     print(f"Slides: {total_slides}")
     print(f"Canvas: {DEFAULT_SLIDE_W}×{DEFAULT_SLIDE_H} pt | Grid: 16×9 coarse, 32×18 fine")
     print("=" * 70)
 
     for slide_idx, slide in enumerate(prs.slides):
-        print(f"\n{'─'*60}")
+        print(f"\n{'-'*60}")
         print(f"Slide {slide_idx + 1}/{total_slides}")
 
         # Parse
@@ -135,7 +135,7 @@ def evaluate(input_path: str, output_path: str | None = None):
         engine = ReflexEngine()
         engine.load_slide(elements)
 
-        # ── Pre-fix audit ──
+        # -- Pre-fix audit --
         result_before = engine.audit()
 
         issues_before = result_before.get("issues", [])
@@ -151,26 +151,26 @@ def evaluate(input_path: str, output_path: str | None = None):
         print(f"  Status: {status}")
         if issues_before:
             for iss in issues_before:
-                print(f"  ✗ {iss['code']} ({iss.get('severity', '?')}) "
+                print(f"  [FAIL] {iss['code']} ({iss.get('severity', '?')}) "
                       f"targets={iss.get('targets', [])} "
                       f"roles={iss.get('roles', [])} "
                       f"overlap={iss.get('overlap_pct', '?')}%")
         if auto_adjusted:
             for adj in auto_adjusted:
-                print(f"  ✓ auto-fixed: {adj}")
+                print(f"  [PASS] auto-fixed: {adj}")
         if not issues_before and not auto_adjusted:
-            print(f"  ✓ Clean")
+            print(f"  [PASS] Clean")
 
         print(f"  Token est (Agent input): {token_est}")
 
-        # ── Post-fix re-audit ──
+        # -- Post-fix re-audit --
         remaining = engine.audit()
         all_issues_after[slide_idx] = [i["code"] for i in remaining.get("issues", [])]
 
         # Write back to pptx for later saving
         apply_element_positions(slide, elements)
 
-    # ── SUMMARY ────────────────────────────────────────────
+    # -- SUMMARY --------------------------------------------
     print(f"\n{'='*70}")
     print(f"SUMMARY")
     print(f"{'='*70}")
@@ -209,9 +209,9 @@ def evaluate(input_path: str, output_path: str | None = None):
             total_high += len(exp)
             total_high_fixed += (len(exp) - resid)
 
-        exp_str = ",".join(sorted(exp)) if exp else "—"
-        det_str = ",".join(sorted(det)) if det else "—"
-        aft_str = ",".join(sorted(aft)) if aft else "✓"
+        exp_str = ",".join(sorted(exp)) if exp else "--"
+        det_str = ",".join(sorted(det)) if det else "--"
+        aft_str = ",".join(sorted(aft)) if aft else "[PASS]"
 
         print(f"{si+1:<8} {exp_str:<30} {det_str:<30} {aft_str:<20} {toks:<8}")
 
@@ -233,21 +233,21 @@ def evaluate(input_path: str, output_path: str | None = None):
         ("Overall fix rate", f"{fix_rate:.1f}%", "≥80%", fix_rate >= 80),
         ("New issue rate", f"{new_issue_rate:.1f}%", "≤10%", new_issue_rate <= 10),
         ("Avg tokens/slide", f"{total_tokens/total_slides:.0f}", "≤1500", total_tokens/total_slides <= 1500),
-        ("False positives", str(false_positives), "—", False),
-        ("False negatives", str(false_negatives), "—", False),
-        ("Auto-fixes applied", str(sum(auto_fix_counts)), "—", False),
+        ("False positives", str(false_positives), "--", False),
+        ("False negatives", str(false_negatives), "--", False),
+        ("Auto-fixes applied", str(sum(auto_fix_counts)), "--", False),
         ("Out-of-bounds residual", f"{sum(1 for si in range(total_slides) for i in all_issues_after.get(si, []) if i == 'OUT_OF_BOUNDS')}", "0", False),
     ]
 
     for name, value, target, passed in checks:
-        status_icon = "✓" if passed else "✗"
+        status_icon = "[PASS]" if passed else "[FAIL]"
         print(f"  {name:<33} {value:<15} {target:<15} {status_icon:<8}")
 
     # Out-of-bounds specifically
     oob_residual = sum(1 for si in range(total_slides)
                        for i in all_issues_after.get(si, [])
                        if i == 'OUT_OF_BOUNDS')
-    print(f"  {'Out-of-bounds residual':<33} {oob_residual:<15} {'0':<15} {'✓' if oob_residual == 0 else '✗':<8}")
+    print(f"  {'Out-of-bounds residual':<33} {oob_residual:<15} {'0':<15} {'[PASS]' if oob_residual == 0 else '[FAIL]':<8}")
 
     print(f"\nTotal slides: {total_slides}")
     print(f"Total token cost (Agent input): {total_tokens}")

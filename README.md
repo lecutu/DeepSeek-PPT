@@ -33,7 +33,7 @@ AI agents face several inherent challenges when manipulating PowerPoint:
 
 ## 💰 DeepSeek Pricing
 
-DeepSeek-V3's ultra-low token pricing (~$0.28/1M output tokens) makes AI-powered PPT generation nearly free — about $0.004 per deck, under $3/year for weekly use.
+DeepSeek's ultra-low token pricing makes AI-powered PPT generation nearly free — a full 10-slide deck costs a fraction of a cent.
 
 ---
 

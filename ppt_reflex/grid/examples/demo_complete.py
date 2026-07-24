@@ -1,22 +1,22 @@
 """
-examples/demo_complete.py — 完整流程演示
+examples/demo_complete.py — Complete workflow demo
 
-load broken.pptx → grid canvas → detect → Agent decision loop → commit
+load broken.pptx -> grid canvas -> detect -> Agent decision loop -> commit
 """
-import sys, os, tempfile
+import sys, os, tempfile, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from grid import GridCanvas, GridConfig, ContentType, Supply, Verdict
 
 
 def main():
     print("="*70)
-    print("PPT Reflex — Complete Agent Loop Demo")
+    print("PPT Reflex - Complete Agent Loop Demo")
     print("="*70)
 
     canvas = GridCanvas(GridConfig())
     supply = Supply(GridConfig())
 
-    # ── Step 1: Load broken.pptx ──
+    # -- Step 1: Load broken.pptx --
     broken_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
         "cases", "broken.pptx"
@@ -30,15 +30,14 @@ def main():
     result = canvas.load(broken_path, 0)  # slide 0
     print(f"   {result}")
 
-    # ── Step 2: Grid snapshot (L0) ──
+    # -- Step 2: Grid snapshot (L0) --
     print(f"\n2. Slide 0 overview:")
     profile = canvas.profile()
     l0 = supply.level0(canvas.info_grid, profile)
-    import json
     print(f"   {json.dumps(l0, ensure_ascii=False, indent=2)[:300]}")
 
-    # ── Step 3: Agent try_place decision loop ──
-    print(f"\n3. Agent loop — trying placements...")
+    # -- Step 3: Agent try_place decision loop --
+    print(f"\n3. Agent loop - trying placements...")
     results = _agent_loop(canvas, supply)
 
     print(f"\n{'-'*60}")
@@ -46,7 +45,7 @@ def main():
     l0 = supply.level0(canvas.info_grid)
     print(f"   {json.dumps(l0, ensure_ascii=False)}")
 
-    # ── Step 5: Commit ──
+    # -- Step 5: Commit --
     out = os.path.join(tempfile.gettempdir(), "complete_demo.pptx")
     canvas.checkpoint()
     r = canvas.commit(out)
@@ -55,7 +54,8 @@ def main():
         print(f"   File: {os.path.getsize(out)} bytes")
 
     print(f"\n{'='*70}")
-    print(f"Demo complete. {'✓' if results['success'] else '⚠'} "
+    status = "PASS" if results['success'] else "WARN"
+    print(f"Demo complete. {status}"
           f"{results['placed']}/{results['tried']} placed.")
     print(f"{'='*70}")
 
@@ -72,9 +72,9 @@ def _agent_loop(canvas, supply) -> dict:
                           "A4","B4","C4","D4","A5","B5","C5","D5"])
     if r.allowed:
         placed += 1
-        print(f"   ✓ body → A2:D5")
+        print(f"   [OK] body -> A2:D5")
     else:
-        print(f"   ✗ body blocked: {supply.format_conflict(r).get('suggestions','?')}")
+        print(f"   [BLOCKED] body: {supply.format_conflict(r).get('suggestions','?')}")
 
     # Agent tries figure in right zone
     tried += 1
@@ -83,9 +83,9 @@ def _agent_loop(canvas, supply) -> dict:
                           "E4","F4","G4","H4","E5","F5","G5","H5"])
     if r.allowed:
         placed += 1
-        print(f"   ✓ figure → E2:H5")
+        print(f"   [OK] figure -> E2:H5")
     else:
-        print(f"   ✗ figure blocked")
+        print(f"   [BLOCKED] figure")
 
     # Agent tries title at top
     tried += 1
@@ -93,27 +93,27 @@ def _agent_loop(canvas, supply) -> dict:
                          ["A1","B1","C1","D1","E1","F1","G1","H1"])
     if r.allowed:
         placed += 1
-        print(f"   ✓ title → A1:H1")
+        print(f"   [OK] title -> A1:H1")
     else:
-        print(f"   ✗ title blocked")
+        print(f"   [BLOCKED] title")
 
-    # Agent tries caption overlapping body → should BLOCK
+    # Agent tries caption overlapping body - should BLOCK
     tried += 1
     r = canvas.try_place("s_cap", ContentType.TEXT, ["C3","D3"])
     if r.allowed:
         placed += 1
-        print(f"   ✓ caption (unexpected — should have blocked)")
+        print(f"   [OK] caption (unexpected - should have blocked)")
     else:
         report = supply.format_conflict(r)
         sug = report.get("suggestions", ["none"])
-        print(f"   ✗ caption on body → BLOCKED. Suggestion: {sug[0]}")
+        print(f"   [BLOCKED] caption on body. Suggestion: {sug[0]}")
         # Agent adapts: try free zone
         if sug and sug[0] != "none":
             tried += 1
             r2 = canvas.try_place("s_cap", ContentType.TEXT, ["A7","B7","C7"])
             if r2.allowed:
                 placed += 1
-                print(f"   ✓ caption moved to A7:C7")
+                print(f"   [OK] caption moved to A7:C7")
 
     return {"success": tried == placed, "tried": tried, "placed": placed}
 
