@@ -1,0 +1,35 @@
+{
+  "name": "ppt-reflex",
+  "version": "0.5.0",
+  "description": "PPT Reflex Engine — deterministic spatial QA + Agent repair loop + LLM decision interface + COM bridge",
+  "requires": ["python-pptx", "pywin32"],
+  "entry": "mcp_server.py",
+  "phases": {
+    "day1_detection": {"status": "complete", "recall": "100%", "precision": "83.3%"},
+    "day1_5_collaboration": {"status": "complete", "scenarios": "6/6"},
+    "phase_c_mcp_server": {"status": "complete", "tools": "19/19"},
+    "phase_v2_repair_planner": {"status": "complete", "regression_rate": "0%"},
+    "phase_l4_llm_agent": {"status": "complete", "token_budget": "~218 tokens/slide"},
+    "phase_com_bridge": {"status": "complete", "powerpoint": "16.0", "performance": "0.06s/slide", "text_overflow": "working"}
+  },
+  "files": {
+    "core": ["engine.py", "rules.py", "layout.py", "nudge.py", "journal.py", "reflex.py"],
+    "bridge": ["bridge.py", "adapter.py"],
+    "planner": ["repair_planner.py"],
+    "llm": ["llm_agent.py"],
+    "mcp": ["mcp_server.py", "mcp-config.json"],
+    "com": ["com_bridge.py", "PPTReflexService/Program.cs", "PPTReflexService/PPTReflexService.csproj"],
+    "tests": ["validate.py", "collab_test.py", "test_mcp.py", "test_com_bridge.py", "test_llm_integration.py", "generate_test.py"],
+    "docs": ["ARCHITECTURE.md", "HANDOVER.md", "manifest.json", "docs/VSTO_ADAPTER.md"]
+  },
+  "mcp_tools": {
+    "lifecycle": ["open_presentation", "save_presentation", "select_slide"],
+    "audit": ["audit_slide"],
+    "layout": ["list_templates", "apply_layout"],
+    "element": ["move_element", "set_element_role", "delete_element"],
+    "context": ["local_context", "element_summary"],
+    "collaboration": ["lock_element", "unlock_element", "notify_human_edit",
+                       "begin_transaction", "commit", "rollback", "undo"],
+    "info": ["get_revision", "get_journal"]
+  }
+}

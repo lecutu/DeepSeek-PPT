@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ppt-reflex": {
+      "command": "python",
+      "args": ["D:/文献搜索员/ppt_reflex/mcp_server.py"],
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      }
+    }
+  }
+}

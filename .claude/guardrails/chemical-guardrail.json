@@ -1,0 +1,166 @@
+{
+  "version": "3.0",
+  "updated": "2026-07-22",
+  "description": "PMSQ/SiOC 合成化学护栏 — SSOT。所有工作区引用此文件，不内联复制。",
+  "source_workspace": "D:\\文献搜索员\\.claude\\guardrails\\chemical-guardrail.json",
+  "scope": "PMSQ synthesis, SiOC anode, sol-gel, silane coupling, pyrolysis",
+  "entries": [
+    {
+      "substance": "Imidazole",
+      "aliases": ["咪唑", "C₃H₄N₂"],
+      "verdict": "competitor",
+      "flag": "🚫",
+      "rationale": "Wang group (USTC) 在用；不进入本体系方案",
+      "source": "Lee 2025 PMSQ SiOC anode experimental design",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "HMDS",
+      "aliases": ["Hexamethyldisilazane", "六甲基二硅氮烷"],
+      "verdict": "risk",
+      "flag": "⚠️",
+      "rationale": "封端过程释放 NH₃；需通风 + 尾气处理",
+      "source": "general knowledge — SiOH end-capping",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "TMSCl",
+      "aliases": ["Trimethylchlorosilane", "三甲基氯硅烷"],
+      "verdict": "ok",
+      "flag": "✅",
+      "rationale": "需 pyridine 作 HCl 吸收剂；标准 SiOH 封端试剂",
+      "source": "general knowledge — silylation chemistry",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "Sn(Oct)₂",
+      "aliases": ["有机锡", "Tin octoate", "Dibutyltin dilaurate", "DBTDL"],
+      "verdict": "risk",
+      "flag": "⚠️",
+      "rationale": "有机锡毒性；优选非金属催化替代",
+      "source": "general knowledge — organotin toxicity",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "Ti(OBu)₄",
+      "aliases": ["Titanium butoxide", "TBOT", "钛酸四丁酯"],
+      "verdict": "risk",
+      "flag": "⚠️",
+      "rationale": "钛酸酯毒性；水解敏感；需手套箱操作",
+      "source": "Dong 2016 review",
+      "added": "2026-07-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "HF",
+      "aliases": ["氢氟酸", "Hydrofluoric acid"],
+      "verdict": "safety_redline",
+      "flag": "🚫",
+      "rationale": "剧毒，穿透皮肤→螯合血钙→心脏骤停。实验室禁用。",
+      "source": "safety regulation — mandatory",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "DMF",
+      "aliases": ["Dimethylformamide", "N,N-二甲基甲酰胺"],
+      "verdict": "risk",
+      "flag": "⚠️",
+      "rationale": "生殖毒性；高沸点难除；优先 NMP 或 DMSO 替代",
+      "source": "general knowledge — solvent toxicity",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "DMAc",
+      "aliases": ["Dimethylacetamide", "N,N-二甲基乙酰胺"],
+      "verdict": "risk",
+      "flag": "⚠️",
+      "rationale": "与 DMF 同族毒性",
+      "source": "general knowledge — solvent toxicity",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "TEA",
+      "aliases": ["Triethylamine", "三乙胺"],
+      "verdict": "ok",
+      "flag": "✅",
+      "rationale": "常用碱/催化剂；无异味耐受即可",
+      "source": "general knowledge",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "KOH",
+      "aliases": ["Potassium hydroxide", "氢氧化钾"],
+      "verdict": "ok",
+      "flag": "✅",
+      "rationale": "标准碱催化剂",
+      "source": "general knowledge",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "NaOH",
+      "aliases": ["Sodium hydroxide", "氢氧化钠"],
+      "verdict": "ok",
+      "flag": "✅",
+      "rationale": "标准碱催化剂",
+      "source": "general knowledge",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "HCl",
+      "aliases": ["Hydrochloric acid", "盐酸"],
+      "verdict": "ok",
+      "flag": "✅",
+      "rationale": "标准酸催化剂；稀溶液即可",
+      "source": "general knowledge",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "H₂SO₄",
+      "aliases": ["Sulfuric acid", "硫酸"],
+      "verdict": "ok",
+      "flag": "✅",
+      "rationale": "标准酸催化剂；注意稀释放热",
+      "source": "general knowledge",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    },
+    {
+      "substance": "Pt/Karstedt",
+      "aliases": ["Karstedt catalyst", "Platinum catalyst", "铂催化剂"],
+      "verdict": "cost_concern",
+      "flag": "⚠️",
+      "rationale": "铂催化剂昂贵；非必需时不推荐",
+      "source": "general knowledge — catalyst cost",
+      "added": "2026-06-01",
+      "last_reviewed": "2026-07-20"
+    }
+  ],
+  "dynamic_rules": {
+    "new_substance": "evidence card 发现不在表中的试剂 → 写入 $RUN/research/chemical-proposals.json",
+    "conflicting_evidence": "发现与现有 verdict 冲突的证据 → 写入 conflicts 字段，标记 ⚠Conflicting",
+    "review_trigger": "proposals 累积 ≥3 条或用户说 /guardrail-review → 人工审核后合并"
+  },
+  "change_log": [
+    {
+      "date": "2026-07-22",
+      "change": "SSOT v3.0: 四份副本统一为单 JSON。新增 dynamic_rules + change_log。",
+      "trigger": "护栏表冗余审计"
+    },
+    {
+      "date": "2026-07-20",
+      "change": "v2.x: 新增 Ti(OBu)₄ → ⚠️Toxicity",
+      "trigger": "Dong 2016 review"
+    }
+  ]
+}
