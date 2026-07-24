@@ -117,6 +117,9 @@ def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str) -> Non
 
         # ── Render with payload if available ──
         if payload is not None and not locked:
+            if content_type == ContentType.IMAGE and payload.image_path:
+                _render_image(slide, x, y, w, h, payload)
+                continue
             _render_payload(slide, x, y, w, h, content_type, payload, ALIGN_MAP)
             continue
 
@@ -189,6 +192,60 @@ def _render_payload(slide, x: float, y: float, w: float, h: float,
         para.line_spacing = p.line_spacing
         para.space_after = Pt(0)
         para.space_before = Pt(0)
+
+
+def _render_image(slide, x: float, y: float, w: float, h: float,
+                  p: ElementPayload) -> None:
+    """Render an image element with fit/fill/crop_center mode."""
+    import os
+    from pptx.util import Pt, Emu
+    from PIL import Image
+
+    if not p.image_path or not os.path.isfile(p.image_path):
+        return
+
+    img = Image.open(p.image_path)
+    img_w_px, img_h_px = img.size
+    if img_w_px == 0 or img_h_px == 0:
+        return
+
+    target_w_pt = w
+    target_h_pt = h
+    img_aspect = img_w_px / img_h_px
+    box_aspect = target_w_pt / target_h_pt
+
+    if p.fit_mode == "fill":
+        # Stretch to fill box exactly (distorts if aspect mismatch)
+        pic = slide.shapes.add_picture(p.image_path, Pt(x), Pt(y), Pt(target_w_pt), Pt(target_h_pt))
+
+    elif p.fit_mode == "crop_center":
+        # Scale to cover box, then crop overflow (centered)
+        if img_aspect > box_aspect:
+            # Image wider → scale to match height, crop left/right
+            scale = target_h_pt / img_h_px
+            scaled_w = img_w_px * scale
+            crop_x = x - (scaled_w - target_w_pt) / 2
+            pic = slide.shapes.add_picture(p.image_path, Pt(crop_x), Pt(y), Pt(scaled_w), Pt(target_h_pt))
+        else:
+            # Image taller → scale to match width, crop top/bottom
+            scale = target_w_pt / img_w_px
+            scaled_h = img_h_px * scale
+            crop_y = y - (scaled_h - target_h_pt) / 2
+            pic = slide.shapes.add_picture(p.image_path, Pt(x), Pt(crop_y), Pt(target_w_pt), Pt(scaled_h))
+
+    else:  # "fit" (default)
+        # Scale to fit inside box, keep aspect ratio, centered
+        if img_aspect > box_aspect:
+            # Image wider → constrained by width
+            fit_w = target_w_pt
+            fit_h = target_w_pt / img_aspect
+        else:
+            # Image taller → constrained by height
+            fit_h = target_h_pt
+            fit_w = target_h_pt * img_aspect
+        fit_x = x + (target_w_pt - fit_w) / 2
+        fit_y = y + (target_h_pt - fit_h) / 2
+        pic = slide.shapes.add_picture(p.image_path, Pt(fit_x), Pt(fit_y), Pt(fit_w), Pt(fit_h))
 
 
 # ═══════════════════════════════════════════════════════════

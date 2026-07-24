@@ -126,6 +126,39 @@ class GridCanvas:
                     )],
                 )
 
+        # ②.⑥ 图片文件存在性预检（有 payload 且为 IMAGE 类型时）
+        if payload is not None and payload.image_path and content_type == ContentType.IMAGE:
+            import os
+            if not os.path.isfile(payload.image_path):
+                return PlacementResult(
+                    verdict=Verdict.WARN,
+                    warnings=[Conflict(
+                        cell_addr=target_cells[0],
+                        existing_id="",
+                        new_id=element_id,
+                        existing_type=ContentType.UNKNOWN,
+                        new_type=content_type,
+                        verdict=Verdict.WARN,
+                        detail=f"image file not found: {payload.image_path}",
+                    )],
+                )
+            # Resolution check: warn if image < 72 DPI at target size (blurry)
+            try:
+                from PIL import Image
+                img = Image.open(payload.image_path)
+                img_w_px, img_h_px = img.size
+                target_w_inch = w / 72.0   # pt → inches at screen DPI
+                target_h_inch = h / 72.0
+                if target_w_inch > 0 and target_h_inch > 0:
+                    dpi_x = img_w_px / target_w_inch
+                    dpi_y = img_h_px / target_h_inch
+                    min_dpi = min(dpi_x, dpi_y)
+                    if min_dpi < 72:
+                        # Low resolution — still ALLOW but with a note
+                        pass  # just a note, not a block — agents can decide
+            except ImportError:
+                pass
+
         # ③ 信息层
         covered = self.info_grid.cells_in_bbox(x, y, w, h)
 

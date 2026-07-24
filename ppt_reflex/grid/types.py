@@ -110,6 +110,10 @@ class ElementPayload:
     # For code boxes / multi-line: number of text lines (for overflow estimation)
     line_count: int = 1
 
+    # For IMAGE elements: path to image file + fit mode
+    image_path: str = ""                # e.g. "D:/images/fig1.png"
+    fit_mode: str = "fit"               # "fit" | "fill" | "crop_center"
+
 
 @dataclass
 class Conflict:
