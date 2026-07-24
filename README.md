@@ -1,6 +1,6 @@
 # 🧠 DeepSeek PPT Maker
 
-> **DeepSeek API 驱动 AI Agent 安全制作/修复 PPT — Agent 选格子 · 引擎判冲突 · 通过才写 PPT**
+> **AI Agent safely creates/fixes PowerPoint slides — Agent picks cells · Engine checks conflicts · Commit only on pass**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -8,72 +8,72 @@
 [![DeepSeek](https://img.shields.io/badge/DeepSeek-%E2%9C%93-orange)](https://deepseek.com)
 [![Claude](https://img.shields.io/badge/Claude-%E2%9C%93-blueviolet)](https://anthropic.com)
 
-**DeepSeek PPT Maker** 是一个让 AI Agent 安全操作 PowerPoint 的开源框架。用 DeepSeek 就能做专业 PPT。
+**DeepSeek PPT Maker** is an open-source framework for AI agents to safely operate PowerPoint. Build professional slides with DeepSeek.
 
 ---
 
-## 🎯 核心能力
+## 🎯 Core Idea
 
-> **Agent 说 Excel 格子坐标 → 引擎实时判冲突 → 通过才写 PPT → 原子写入，0 次文件污染**
-
----
-
-## 🔥 解决的问题
-
-让 AI Agent 操作 PPT 面临几个固有难题：
-
-- **冲突检测** — 元素堆叠/越界 → `try_place` 事前拦截，引擎实时判冲突，通过才写入
-- **坐标计算** — Agent 不擅长 pt 坐标计算 → 格子地址（如 `A2:D5`），引擎自动翻译为精确坐标
-- **文件污染** — 传统 Agent 反复试错修改 PPT 文件 → 原子写入，失败自动 rollback，文件零污染
-- **美观性** — Agent 无审美判断力 → WCAG 2.1 对比度校验 + 文字溢出检测 + 配色合规检查
-- **图片** — Agent 不会做图 → 内置 ImagePrompter，自动生成 Midjourney/DALL·E/SD 提示词
-- **模型绑定** — 绑定单一 LLM → 支持 DeepSeek / Claude / 任何 OpenAI-compatible 接口
+> **Agent says cell addresses → Engine checks conflicts in real-time → Passes before writing → Atomic commit, zero corruption**
 
 ---
 
-## 💰 DeepSeek 成本
+## 🔥 Problems Solved
 
-DeepSeek-V3 API 极低的 token 价格（~$0.28/1M output tokens）意味着 AI 制作 PPT 几乎是零成本——单次生成约 $0.004，做一年不超 ¥20。
+AI agents face several inherent challenges when manipulating PowerPoint:
+
+- **Collision detection** — overlapping/overflowing elements → `try_place` pre-emptive blocking, engine judges in real-time before writing
+- **Coordinate math** — agents struggle with pt coordinates → grid-address system (e.g. `A2:D5`), engine translates to precise positions
+- **File corruption** — agents retry and overwrite repeatedly → atomic commit with auto-rollback on failure, zero file pollution
+- **Aesthetics** — agents have no visual judgment → WCAG 2.1 contrast check + text overflow detection + palette compliance
+- **Images** — agents can't generate visuals → built-in ImagePrompter auto-generates Midjourney/DALL·E/SD prompts
+- **Model lock-in** — tied to a single LLM → supports DeepSeek / Claude / any OpenAI-compatible API
 
 ---
 
-## 📦 核心模块
+## 💰 DeepSeek Pricing
+
+DeepSeek-V3's ultra-low token pricing (~$0.28/1M output tokens) makes AI-powered PPT generation nearly free — about $0.004 per deck, under $3/year for weekly use.
+
+---
+
+## 📦 Modules
 
 ```
 ppt_reflex/
-├── grid/                     ★ 新一代感知型网格画布
+├── grid/                     ★ Perceptive grid canvas
 │   ├── canvas.py             GridCanvas — try_place / commit / rollback
-│   ├── positioning.py        地址 ↔ pt 坐标 (A1:D5 ⇄ 60,60,240,240)
-│   ├── info_grid.py          32×18 有状态信息层 + checkpoint
-│   ├── matrix.py             类型 × 类型 → BLOCK / ALLOW / WARN + z_hint
-│   ├── serializer.py         Grid ↔ PPT 往返 (唯一碰 python-pptx 的文件)
-│   ├── supply.py             Agent 输出分层: L0(50t)/L1(100t)/L2(60t)
-│   ├── spatial.py            SpatialIndex — 最近邻/间隙矩阵/对齐组/密度热图
-│   ├── text_metrics.py       中英混合文字溢出估算 (±15%)
-│   ├── aesthetics.py         WCAG 对比度 + 风格约束 + 密度/间距/对齐
-│   ├── templates.py          6 套配色模板 + .override() 自定义颜色
-│   ├── profiles.py           版式推断 (标题/正文/页脚/背景)
+│   ├── positioning.py        Address ↔ pt coordinates (A1:D5 ⇄ 60,60,240,240)
+│   ├── info_grid.py          32×18 stateful info layer + checkpoint
+│   ├── matrix.py             Type × Type → BLOCK / ALLOW / WARN + z_hint
+│   ├── serializer.py         Grid ↔ PPT round-trip (only file touching python-pptx)
+│   ├── supply.py             Agent output layering: L0(50t)/L1(100t)/L2(60t)
+│   ├── spatial.py            SpatialIndex — nearest neighbor/gap matrix/alignment groups/density heatmap
+│   ├── text_metrics.py       CJK-Latin mixed text overflow estimation (±15%)
+│   ├── aesthetics.py         WCAG contrast + style constraints + density/spacing/alignment
+│   ├── templates.py          6 color templates + .override() custom colors
+│   ├── profiles.py           Layout inference (title/body/footer/background)
 │   ├── types.py              ContentType / Verdict / BLOCK_PAIRS / PlacementResult
 │   └── tests/                34 tests — all green ✓
 │
-├── image_prompter.py         图片 AI 提示词生成器 (6类型 × 3工具 × 6配色)
-├── mcp_server.py             22 MCP Tools → Agent (含 grid 4 工具)
-├── reflex.py                 主协调器 L1-L5
-├── engine.py                 几何引擎 (标记 deprecated, 迁移到 grid/)
-├── validate.py               Day 1 闭环验证 (100% recall / 83% precision)
-├── collab_test.py            人机协同 6 场景测试
-├── test_mcp.py               19 工具端到端测试
-├── llm_agent.py              LLM 决策接口 (DeepSeek/Claude/OpenAI)
-├── agent_loop.py             Agent 修复循环
-├── repair_planner.py         确定性修复器 + 模拟器
-└── collab_agent.py           协作者 Agent 接口
+├── image_prompter.py         AI image prompt generator (6 types × 3 tools × 6 palettes)
+├── mcp_server.py             22 MCP Tools → Agent (includes 4 grid tools)
+├── reflex.py                 Master coordinator L1-L5
+├── engine.py                 Geometry engine (deprecated, migrated to grid/)
+├── validate.py               Day 1 closed-loop validation (100% recall / 83% precision)
+├── collab_test.py            Human-AI collaboration 6-scenario test
+├── test_mcp.py               19-tool end-to-end test
+├── llm_agent.py              LLM decision interface (DeepSeek/Claude/OpenAI)
+├── agent_loop.py             Agent repair loop
+├── repair_planner.py         Deterministic repairer + simulator
+└── collab_agent.py           Collaborator agent interface
 ```
 
 ---
 
-## ⚡ 5 分钟上手
+## ⚡ 5-Minute Quick Start
 
-### 安装
+### Install
 
 ```bash
 pip install python-pptx
@@ -81,13 +81,13 @@ git clone https://github.com/lecutu/deepseek-ppt-maker.git
 cd deepseek-ppt-maker
 ```
 
-### DeepSeek 驱动 PPT 修复
+### DeepSeek-Powered PPT Repair
 
 ```bash
 export DEEPSEEK_API_KEY="sk-your-key"
 python ppt_reflex/llm_agent.py cases/broken.pptx --provider deepseek --max-slides 5
 
-# 输出：
+# Output:
 #   PPT Reflex Agent + LLM (Provider: deepseek)
 #   Slides: 5 | Max Rounds: 3
 #   Slide 1: deterministic fix ✓
@@ -96,13 +96,13 @@ python ppt_reflex/llm_agent.py cases/broken.pptx --provider deepseek --max-slide
 #   Slides fixed: 4 | LLM successes: 3 | Token cost: ~$0.002
 ```
 
-### Grid Canvas 制作新 PPT
+### Grid Canvas — Build New PPTs
 
 ```python
 from grid import GridCanvas, GridConfig, ContentType
 from grid.templates import get_template
 
-# 选模板 (可自定义颜色)
+# Pick a template (custom colors supported)
 t = get_template("academic").override(accent_hex="E74C3C")
 
 canvas = GridCanvas(GridConfig())
@@ -117,67 +117,67 @@ else:
     print(f"Try: {result.free_suggestion}")
 ```
 
-### MCP Server — Agent 直接调用
+### MCP Server — Direct Agent Access
 
 ```bash
-python ppt_reflex/mcp_server.py             # stdio 模式
-python ppt_reflex/mcp_server.py --port 8081 # HTTP 模式
+python ppt_reflex/mcp_server.py             # stdio mode
+python ppt_reflex/mcp_server.py --port 8081 # HTTP mode
 ```
 
-| 工具 | 用途 |
+| Tool | Purpose |
 |:--|:--|
-| `element_summary` | 当前页元素一览 |
-| `audit_slide` | 全量检测 (7 类规则) |
-| `try_place` | **★ 事前拦截 — Agent 说格子，引擎判冲突** |
-| `commit_grid` | 原子写入 PPT |
-| `rollback_grid` | 回滚到 checkpoint |
-| `grid_snapshot` | 分层输出 L0/L1/L2 |
-| `apply_layout` | 套用 8 种布局模板 |
-| `move_element` | 移动元素 (带 revision 乐观锁) |
-| `local_context` | 元素 + 邻居上下文 |
-| `lock_element` | 锁定模板装饰不被修改 |
-| ... | 等 22 个工具 |
+| `element_summary` | List all elements on slide |
+| `audit_slide` | Full audit (7 rule categories) |
+| `try_place` | **★ Pre-emptive blocking — Agent picks cells, engine judges conflicts** |
+| `commit_grid` | Atomic PPT write |
+| `rollback_grid` | Revert to checkpoint |
+| `grid_snapshot` | Layered output L0/L1/L2 |
+| `apply_layout` | Apply one of 8 layout templates |
+| `move_element` | Move element (with revision optimistic lock) |
+| `local_context` | Element + neighbor context |
+| `lock_element` | Lock template decoration from modification |
+| ... | 22 tools total |
 
-### 图片 AI 提示词生成
+### AI Image Prompt Generator
 
 ```python
 from ppt_reflex.image_prompter import ImagePrompter
 
 p = ImagePrompter(template="academic")
 r = p.generate(
-    "SiOC 负极材料充放电机理示意图",
+    "SiOC anode charge-discharge mechanism diagram",
     image_type="scientific_diagram",
     provider="midjourney"
 )
 print(r.full_prompt)
-# → "SiOC 负极材料充放电机理示意图, clean scientific illustration,
+# → "SiOC anode charge-discharge mechanism diagram, clean scientific illustration,
 #    technical diagram, white background, color scheme: deep navy blue
 #    and muted brick red accents --ar 16:9 --v 6.1"
 ```
 
-6 类型 × 3 工具 (Midjourney / DALL·E / SD) × 6 配色自动匹配。
+6 types × 3 tools (Midjourney / DALL·E / SD) × 6 palette auto-matching.
 
 ---
 
-## 🏗️ 架构理念
+## 🏗️ Architecture
 
-### 双层网格
+### Dual-Layer Grid
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ 定位层 (16×9, 60pt/cell, A1..P9)                   │
-│ ★ Agent 说的语言                                    │
-│ "body 放 A2:D5, figure 放 E2:H6"                    │
-│ 引擎翻译 → pt 坐标, ~425 tokens/slide               │
+│ Positioning Layer (16×9, 60pt/cell, A1..P9)        │
+│ ★ The language agents speak                         │
+│ "body at A2:D5, figure at E2:H6"                    │
+│ Engine translates → pt coords, ~425 tokens/slide    │
 ├─────────────────────────────────────────────────────┤
-│ 信息层 (32×18, 30pt/cell, 内部)                    │
-│ ★ 引擎的感知地图                                     │
-│ 每格 = {owner_id, content_type, z_order, locked}    │
-│ try_place 时扫描 → 发现冲突 → 拦截                   │
+│ Info Layer (32×18, 30pt/cell, internal)            │
+│ ★ Engine's perception map                           │
+│ Each cell = {owner_id, content_type, z, locked}     │
+│ try_place scans → finds conflict → blocks           │
 └─────────────────────────────────────────────────────┘
 ```
 
-### 交互矩阵
+### Collision Matrix
 
 |  | TEXT | TEXTBOX | IMAGE | TABLE | CHART |
 |:--|:--:|:--:|:--:|:--:|:--:|
@@ -187,40 +187,40 @@ print(r.full_prompt)
 | **TABLE** | ❌ | ✅ | ❌ | ❌ | ❌ |
 | **CHART** | ❌ | ✅ | ❌ | ❌ | ❌ |
 
-只拦 8 对真正冲突的组合，其余全放行。
+Only 8 truly problematic pairs are blocked. Everything else passes.
 
-### try_place 实时检测
+### try_place — Real-Time Conflict Detection
 
 ```
-Agent 说: "body 放 A2:D6"
-  → cells_to_bbox → bbox 边界检查
-  → 扫描信息层 32×18 网格
-  → 交互矩阵: TEXT 叠 TEXT? → BLOCK
+Agent says: "body at A2:D6"
+  → cells_to_bbox → bbox boundary check
+  → scan info layer 32×18 grid
+  → collision matrix: TEXT on TEXT? → BLOCK
   → PlacementResult {verdict, conflicts, z_hint, free_suggestion}
 ```
 
-### 原子写入
+### Atomic Writes
 
 ```
-try_place → 成功 → 信息层暂存
-→ commit() → 写临时文件 → os.replace() → 确认 checkpoint
-→ 失败 → rollback() → 信息层恢复 → PPT 文件从未被接触
+try_place → passes → info layer staged
+→ commit() → write temp file → os.replace() → confirm checkpoint
+→ fails → rollback() → info layer restored → PPT file never touched
 ```
 
 ---
 
-## 🎨 6 套配色模板
+## 🎨 6 Color Templates
 
-| 模板 | 背景 | 主色 | 强调色 | 对比度 | 适用 |
+| Template | BG | Primary | Accent | Contrast | Use Case |
 |:--|:--|:--|:--|:--|:--|
-| `academic` | `#FFFFFF` 白 | `#1B3A5C` 深蓝 | `#C0392B` 砖红 | 13.8:1 | 文献汇报/开题/答辩 |
-| `business` | `#FFFFFF` 白 | `#0052D9` 企业蓝 | `#ED7B2F` 橙 | 12.6:1 | 工作/年终/述职 |
-| `minimal` | `#FFFFFF` 白 | `#2D5BD7` 蓝 | `#FF4757` 红 | 14.3:1 | 分享会/TED |
-| `data_report` | `#FFFFFF` 白 | `#1976D2` 蓝 | `#F57C00` 橙 | 16.1:1 | 年报/数据分析 |
-| `teaching` | `#FFFDF5` 暖白 | `#2196F3` 蓝 | `#FF9800` 橙 | 12.4:1 | 培训/课程 |
-| `product` | `#1D1D1F` 深灰 | `#6366F1` 紫 | `#8B5CF6` 紫 | 13.8:1 | 品牌/发布 |
+| `academic` | `#FFFFFF` White | `#1B3A5C` Navy | `#C0392B` Brick | 13.8:1 | Papers / Defense / Seminars |
+| `business` | `#FFFFFF` White | `#0052D9` Blue | `#ED7B2F` Orange | 12.6:1 | Reports / Reviews |
+| `minimal` | `#FFFFFF` White | `#2D5BD7` Blue | `#FF4757` Red | 14.3:1 | Talks / Lightning |
+| `data_report` | `#FFFFFF` White | `#1976D2` Blue | `#F57C00` Orange | 16.1:1 | Annual / Analytics |
+| `teaching` | `#FFFDF5` Warm | `#2196F3` Blue | `#FF9800` Orange | 12.4:1 | Courses / Training |
+| `product` | `#1D1D1F` Dark | `#6366F1` Indigo | `#8B5CF6` Purple | 13.8:1 | Brand / Launch |
 
-自定义颜色：
+Custom colors in one line:
 
 ```python
 from grid.templates import get_template
@@ -229,88 +229,88 @@ t = get_template("academic").override(bg_hex="FAFAFA", accent_hex="E74C3C")
 
 ---
 
-## 🧪 测试
+## 🧪 Tests
 
 ```bash
 python -m pytest ppt_reflex/grid/tests/ -v   # 34 tests
 python ppt_reflex/test_mcp.py                # 19 tools
 python ppt_reflex/collab_test.py             # 6 scenarios
-python ppt_reflex/validate.py                # 检测性能
+python ppt_reflex/validate.py                # detection performance
 ```
 
-| 测试套件 | 结果 |
+| Suite | Result |
 |:--|:--|
-| `test_positioning.py` (8) | ✅ 地址↔pt 往返一致 |
+| `test_positioning.py` (8) | ✅ Address ↔ pt round-trip consistent |
 | `test_matrix.py` (5) | ✅ BLOCK/ALLOW/WARN/z_hint |
 | `test_canvas.py` (8) | ✅ try_place/commit/rollback |
-| `test_serializer.py` (7) | ✅ Grid↔PPT 密度 0.134 ⇄ 0.134 |
-| `test_supply.py` (3) | ✅ L0/L1/L2 token 预算 |
-| `test_profiles.py` (3) | ✅ 版式推断 |
-| `test_aesthetics.py` (5) | ✅ WCAG + 风格约束 |
-| `test_templates.py` (1) | ✅ 6 模板 CR ≥ 12.4:1 |
-| `test_mcp.py` (19) | ✅ 全部 MCP 工具 |
-| `collab_test.py` (6) | ✅ 人机协同 |
+| `test_serializer.py` (7) | ✅ Grid ↔ PPT density 0.134 ⇄ 0.134 |
+| `test_supply.py` (3) | ✅ L0/L1/L2 token budget |
+| `test_profiles.py` (3) | ✅ Layout inference |
+| `test_aesthetics.py` (5) | ✅ WCAG + style constraints |
+| `test_templates.py` (1) | ✅ 6 templates CR ≥ 12.4:1 |
+| `test_mcp.py` (19) | ✅ All MCP tools |
+| `collab_test.py` (6) | ✅ Human-AI collaboration |
 
 ---
 
 ## 🔧 Agent Prompt
 
 ```
-你是 PPT 布局员。你使用 Grid Canvas 操作 PPT：
+You are a PPT layout agent using Grid Canvas:
 
-可用操作:
-- grid_snapshot(level=0) 获取幻灯片总览 (~50 tokens)
-- try_place(element_id, content_type, cells) 尝试放置 → 引擎判冲突
-- commit(ppt_path) 原子写入 PPT
-- rollback() 回滚上次操作
+Available operations:
+- grid_snapshot(level=0) get slide overview (~50 tokens)
+- try_place(element_id, content_type, cells) attempt placement → engine judges conflicts
+- commit(ppt_path) atomic PPT write
+- rollback() revert last operation
 
 content_type: TEXT | TEXTBOX | IMAGE | TABLE | CHART | SHAPE | ANNOTATION | TITLE
 
-规则:
-- 定位层用 Excel 命名: "A2:D5" 表示 A2 到 D5 的矩形区域
-- 不可逾越 BLOCK_PAIRS
-- 背景/深色色块禁止纯黑 (#000)
-- 正文用 #222-#444 深灰区间，字体 ≥ 14pt
+Rules:
+- Use Excel-style cell addresses: "A2:D5" = rectangle from A2 to D5
+- Never violate BLOCK_PAIRS
+- Backgrounds: no pure black (#000)
+- Body text: #222-#444 dark gray range, font ≥ 14pt
 ```
 
 ---
 
-## 📐 工程参考
+## 📐 Engineering References
 
-| 原系统 | 核心概念 | 映射 |
+| Source | Concept | Mapping |
 |:--|:--|:--|
-| **Unity Physics2D** | Layer Collision Matrix | → 交互矩阵 (BLOCK_PAIRS) |
-| **CSS Grid Layout** | grid-template-areas 命名 | → 定位层 A1..P9 |
-| **PCB Design Rules** | online DRC + batch DRC | → try_place(实时) + audit(全局) |
-| **Figma Auto Layout** | 对齐 + 间距 + 约束 | → 对齐建议 + 密度热力图 |
+| **Unity Physics2D** | Layer Collision Matrix | → Collision matrix (BLOCK_PAIRS) |
+| **CSS Grid Layout** | grid-template-areas naming | → Positioning layer A1..P9 |
+| **PCB Design Rules** | online DRC + batch DRC | → try_place (real-time) + audit (global) |
+| **Figma Auto Layout** | Alignment + spacing + constraints | → Alignment hints + density heatmap |
 
 ---
 
 ## 🗺️ Roadmap
 
-- [x] 双层网格 (16×9 + 32×18)
-- [x] 交互矩阵 (6 ContentType × 8 BLOCK_PAIRS)
+- [x] Dual-layer grid (16×9 + 32×18)
+- [x] Collision matrix (6 ContentType × 8 BLOCK_PAIRS)
 - [x] try_place / commit / rollback
-- [x] Agent 输出分层 (L0/L1/L2)
-- [x] 图片 AI 提示词生成器 (ImagePrompter)
-- [x] WCAG 2.1 美观性引擎
-- [x] 6 套配色模板 + 自定义颜色
+- [x] Agent output layering (L0/L1/L2)
+- [x] AI image prompt generator (ImagePrompter)
+- [x] WCAG 2.1 aesthetics engine
+- [x] 6 templates + custom color override
 - [x] MCP Server (22 tools)
-- [x] DeepSeek / Claude / OpenAI 多 LLM 支持
-- [x] 原子写入 + checkpoint/rollback
-- [ ] OfficeCLI 渲染集成 (截图预览)
-- [ ] 多页一致性校验
-- [ ] 模板反向识别 (PPT → TemplateProfile)
-- [ ] 图表数据绑定 (CSV → Chart)
-- [ ] PPT → Markdown 双向转换
-- [ ] Web UI (React 网格画布)
+- [x] DeepSeek / Claude / OpenAI multi-LLM support
+- [x] Atomic write + checkpoint/rollback
+- [ ] OfficeCLI render integration (screenshot preview)
+- [ ] Multi-slide consistency validation
+- [ ] Template reverse recognition (PPT → TemplateProfile)
+- [ ] Chart data binding (CSV → Chart)
+- [ ] PPT ↔ Markdown bidirectional conversion
+- [ ] Web UI (React grid canvas)
 
 ---
 
-## 🤝 贡献
+## 🤝 Contribute
 
-MIT License — 随意使用/修改/商用。PR welcome。
+MIT License — use freely, modify, commercial use. PRs welcome.
 
 ---
 
-**DeepSeek 驱动 · Agent 选格子 · 引擎判冲突 · 通过才写 PPT。**
+**DeepSeek powered · Agent picks cells · Engine judges conflicts · Commit on pass.**
