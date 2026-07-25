@@ -1,0 +1,479 @@
+{
+  "_meta": {
+    "version": "2.0",
+    "description": "六种风格预设 + 图片布局策略一体化。每种风格定义色彩/字体/形状 + image_layout 控制图片落位模式。AI 选定 preset 后图片规则随之锁定。",
+    "one_per_deck": true,
+    "modifiable": true
+  },
+  "selection_guide": {
+    "by_audience": {
+      "executive_client": ["corporate_minimal", "government_solemn"],
+      "engineers_researchers": ["tech_dark", "academic_rigorous"],
+      "general_public_marketing": ["editorial_magazine", "creative_vibrant"]
+    },
+    "by_occasion": {
+      "pitch_consulting": "corporate_minimal",
+      "product_launch_demo": "tech_dark",
+      "paper_defense_seminar": "academic_rigorous",
+      "brand_story_keynote": "editorial_magazine",
+      "campaign_social": "creative_vibrant",
+      "official_report_briefing": "government_solemn"
+    }
+  },
+  "presets": {
+    "corporate_minimal": {
+      "display_name": "商务极简",
+      "mood": "专业、冷静、可信",
+      "theme": "light",
+      "color_override": {
+        "bg": "#FFFFFF",
+        "surface": "#F4F6F9",
+        "text_primary": "#0F172A",
+        "text_secondary": "#475569",
+        "accent": "#1D4ED8",
+        "accent_soft": "#E8EEFC",
+        "on_accent": "#FFFFFF",
+        "warn": "#DC2626"
+      },
+      "shape_override": {
+        "corner_radius_pt": {"card": 8, "pill": 999, "chip": 6},
+        "shadow": "none",
+        "border_pt": 1
+      },
+      "font_override": {
+        "title_weight": "bold",
+        "body_weight": "normal",
+        "scale_h1": 28,
+        "scale_h2": 18,
+        "scale_body": 14
+      },
+      "image_layout": {
+        "philosophy": "图片是论据的视觉证据，不是氛围装饰",
+        "preferred_modes": ["hero_right", "hero_left", "center_float"],
+        "mode_constraints": {
+          "hero_right": {
+            "max_width_pt": 380,
+            "max_height_pt": 400,
+            "anchor": "center",
+            "image_ratio": 0.40
+          },
+          "hero_left": {
+            "max_width_pt": 380,
+            "max_height_pt": 400,
+            "anchor": "center",
+            "image_ratio": 0.40
+          },
+          "center_float": {
+            "max_width_pt": 520,
+            "max_height_pt": 340,
+            "anchor": "center",
+            "image_ratio": 0.55
+          },
+          "hero_top": {
+            "max_width_pt": 840,
+            "max_height_pt": 260,
+            "anchor": "top_center",
+            "image_ratio": 0.45
+          }
+        },
+        "treatment": {
+          "corner_radius_pt": 8,
+          "border_role": "border_subtle",
+          "shadow_role": "soft"
+        },
+        "caption": {
+          "font_size": 11,
+          "alignment": "center",
+          "max_lines": 1,
+          "prefix": ""
+        }
+      },
+      "guidelines": [
+        "一页一个强调色落点，其余全灰阶",
+        "用细线分隔区块而非色块堆叠",
+        "禁止渐变、发光、大圆角"
+      ]
+    },
+    "tech_dark": {
+      "display_name": "科技深色",
+      "mood": "前沿、沉浸、戏剧化",
+      "theme": "dark",
+      "color_override": {
+        "bg": "#0B1020",
+        "surface": "#141B2D",
+        "text_primary": "#EAF0FB",
+        "text_secondary": "#A9B6CF",
+        "accent": "#22D3EE",
+        "accent_soft": "#10303A",
+        "on_accent": "#06121A",
+        "warn": "#FB7185",
+        "success": "#34D399"
+      },
+      "shape_override": {
+        "corner_radius_pt": {"card": 14, "pill": 999, "chip": 8},
+        "shadow": "lift_accent",
+        "border_pt": 1.5
+      },
+      "font_override": {
+        "title_weight": "bold",
+        "body_weight": "normal",
+        "scale_h1": 36,
+        "scale_h2": 20,
+        "scale_body": 14
+      },
+      "image_layout": {
+        "philosophy": "图片是暗场中的发光窗口",
+        "preferred_modes": ["hero_right", "center_float", "hero_top"],
+        "mode_constraints": {
+          "hero_right": {
+            "max_width_pt": 460,
+            "max_height_pt": 420,
+            "anchor": "center",
+            "image_ratio": 0.50
+          },
+          "hero_top": {
+            "max_width_pt": 880,
+            "max_height_pt": 300,
+            "anchor": "top_center",
+            "image_ratio": 0.50
+          },
+          "center_float": {
+            "max_width_pt": 600,
+            "max_height_pt": 380,
+            "anchor": "center",
+            "image_ratio": 0.65
+          },
+          "hero_left": {
+            "max_width_pt": 460,
+            "max_height_pt": 420,
+            "anchor": "center",
+            "image_ratio": 0.50
+          }
+        },
+        "treatment": {
+          "corner_radius_pt": 12,
+          "border_role": "border_subtle",
+          "shadow_role": "glow"
+        },
+        "caption": {
+          "font_size": 11,
+          "alignment": "left",
+          "max_lines": 1,
+          "prefix": "// "
+        }
+      },
+      "guidelines": [
+        "暗场只点 1-2 处霓虹，其余靠灰阶层次",
+        "霓虹强调色块上文字用深色 on_accent",
+        "禁止白字落亮霓虹填充块"
+      ]
+    },
+    "academic_rigorous": {
+      "display_name": "学术严谨",
+      "mood": "严谨、克制、可信",
+      "theme": "light",
+      "color_override": {
+        "bg": "#FBFAF7",
+        "surface": "#FFFFFF",
+        "text_primary": "#221F1A",
+        "text_secondary": "#57524A",
+        "accent": "#7A3B2E",
+        "accent_soft": "#EFE3DF",
+        "on_accent": "#FFFFFF",
+        "warn": "#C2410C"
+      },
+      "shape_override": {
+        "corner_radius_pt": {"card": 4, "pill": 999, "chip": 4},
+        "shadow": "none",
+        "border_pt": 1
+      },
+      "font_override": {
+        "title_weight": "bold",
+        "body_weight": "normal",
+        "scale_h1": 28,
+        "scale_h2": 16,
+        "scale_body": 14
+      },
+      "image_layout": {
+        "philosophy": "图片是 Figure，必须编号+有 caption+被正文引用",
+        "preferred_modes": ["center_float", "hero_top", "hero_right"],
+        "mode_constraints": {
+          "center_float": {
+            "max_width_pt": 560,
+            "max_height_pt": 360,
+            "anchor": "center",
+            "image_ratio": 0.60
+          },
+          "hero_top": {
+            "max_width_pt": 800,
+            "max_height_pt": 280,
+            "anchor": "top_center",
+            "image_ratio": 0.45
+          },
+          "hero_right": {
+            "max_width_pt": 420,
+            "max_height_pt": 380,
+            "anchor": "center",
+            "image_ratio": 0.45
+          },
+          "hero_left": {
+            "max_width_pt": 420,
+            "max_height_pt": 380,
+            "anchor": "center",
+            "image_ratio": 0.45
+          },
+          "hero_top": {
+            "max_width_pt": 800,
+            "max_height_pt": 280,
+            "anchor": "top_center",
+            "image_ratio": 0.45
+          }
+        },
+        "treatment": {
+          "corner_radius_pt": 0,
+          "border_role": "border_strong",
+          "shadow_role": "none"
+        },
+        "caption": {
+          "font_size": 11,
+          "alignment": "left",
+          "max_lines": 2,
+          "prefix": "Figure N. "
+        }
+      },
+      "guidelines": [
+        "衬线标题 + 无衬线正文",
+        "低饱和配色，模拟印刷品质感",
+        "禁止圆角大卡片、阴影、渐变"
+      ]
+    },
+    "editorial_magazine": {
+      "display_name": "杂志编辑",
+      "mood": "高级、有态度、叙事感",
+      "theme": "light",
+      "color_override": {
+        "bg": "#F7F4EF",
+        "surface": "#FFFFFF",
+        "text_primary": "#14110E",
+        "text_secondary": "#4A443C",
+        "accent": "#C2410C",
+        "accent_soft": "#F3E2D8",
+        "on_accent": "#FFFFFF",
+        "warn": "#DC2626"
+      },
+      "shape_override": {
+        "corner_radius_pt": {"card": 0, "pill": 999, "chip": 0},
+        "shadow": "none",
+        "border_pt": 1
+      },
+      "font_override": {
+        "title_weight": "bold",
+        "body_weight": "normal",
+        "scale_h1": 44,
+        "scale_h2": 26,
+        "scale_body": 14
+      },
+      "image_layout": {
+        "philosophy": "图片是主角，占最大面积，文字是旁白",
+        "preferred_modes": ["hero_top", "center_float", "hero_left"],
+        "mode_constraints": {
+          "hero_top": {
+            "max_width_pt": 900,
+            "max_height_pt": 380,
+            "anchor": "top_center",
+            "image_ratio": 0.60
+          },
+          "center_float": {
+            "max_width_pt": 660,
+            "max_height_pt": 420,
+            "anchor": "center",
+            "image_ratio": 0.70
+          },
+          "hero_left": {
+            "max_width_pt": 520,
+            "max_height_pt": 460,
+            "anchor": "center",
+            "image_ratio": 0.55
+          },
+          "hero_right": {
+            "max_width_pt": 520,
+            "max_height_pt": 460,
+            "anchor": "center",
+            "image_ratio": 0.55
+          }
+        },
+        "treatment": {
+          "corner_radius_pt": 0,
+          "border_role": "none",
+          "shadow_role": "none"
+        },
+        "caption": {
+          "font_size": 11,
+          "alignment": "right",
+          "max_lines": 1,
+          "prefix": ""
+        }
+      },
+      "guidelines": [
+        "超大标题 + 不对称网格 + 硬边构图",
+        "每页一个强视觉锚点，故意做低信息密度",
+        "禁止圆角卡片+阴影的通用模板感"
+      ]
+    },
+    "creative_vibrant": {
+      "display_name": "创意活力",
+      "mood": "活泼、友好、年轻",
+      "theme": "light",
+      "color_override": {
+        "bg": "#FFFDF7",
+        "surface": "#FFFFFF",
+        "text_primary": "#1F2430",
+        "text_secondary": "#4B5563",
+        "accent": "#F43F5E",
+        "accent_soft": "#FFE4E6",
+        "on_accent": "#FFFFFF",
+        "warn": "#DC2626"
+      },
+      "shape_override": {
+        "corner_radius_pt": {"card": 24, "pill": 999, "chip": 12},
+        "shadow": "soft_sticker",
+        "border_pt": 2
+      },
+      "font_override": {
+        "title_weight": "bold",
+        "body_weight": "normal",
+        "scale_h1": 32,
+        "scale_h2": 22,
+        "scale_body": 14
+      },
+      "image_layout": {
+        "philosophy": "图片是贴纸——大圆角+硬阴影，像手账里的照片",
+        "preferred_modes": ["center_float", "hero_right", "hero_left"],
+        "mode_constraints": {
+          "center_float": {
+            "max_width_pt": 460,
+            "max_height_pt": 360,
+            "anchor": "center",
+            "image_ratio": 0.50
+          },
+          "hero_right": {
+            "max_width_pt": 420,
+            "max_height_pt": 400,
+            "anchor": "center",
+            "image_ratio": 0.45
+          },
+          "hero_left": {
+            "max_width_pt": 420,
+            "max_height_pt": 400,
+            "anchor": "center",
+            "image_ratio": 0.45
+          },
+          "hero_top": {
+            "max_width_pt": 840,
+            "max_height_pt": 300,
+            "anchor": "top_center",
+            "image_ratio": 0.50
+          }
+        },
+        "treatment": {
+          "corner_radius_pt": 20,
+          "border_role": "border_strong",
+          "shadow_role": "sticker"
+        },
+        "caption": {
+          "font_size": 11,
+          "alignment": "center",
+          "max_lines": 1,
+          "prefix": ""
+        }
+      },
+      "guidelines": [
+        "大圆角 + 重字重 + 贴纸硬阴影",
+        "单页 ≤2 彩色，多色轮换到整份",
+        "装饰几何只放边角点睛"
+      ]
+    },
+    "government_solemn": {
+      "display_name": "政务庄重",
+      "mood": "庄重、权威、稳重",
+      "theme": "light",
+      "color_override": {
+        "bg": "#FFFFFF",
+        "surface": "#F2F4F8",
+        "text_primary": "#1A2233",
+        "text_secondary": "#44506A",
+        "accent": "#C41E24",
+        "accent_soft": "#F6E3E5",
+        "on_accent": "#FFFFFF",
+        "warn": "#C41E24"
+      },
+      "shape_override": {
+        "corner_radius_pt": {"card": 4, "pill": 999, "chip": 4},
+        "shadow": "none",
+        "border_pt": 1.5
+      },
+      "font_override": {
+        "title_weight": "bold",
+        "body_weight": "normal",
+        "scale_h1": 28,
+        "scale_h2": 18,
+        "scale_body": 15
+      },
+      "image_layout": {
+        "philosophy": "图片是工作实证，庄重、清晰、有说明",
+        "preferred_modes": ["hero_top", "hero_right", "center_float"],
+        "mode_constraints": {
+          "hero_top": {
+            "max_width_pt": 840,
+            "max_height_pt": 280,
+            "anchor": "top_center",
+            "image_ratio": 0.45
+          },
+          "hero_right": {
+            "max_width_pt": 400,
+            "max_height_pt": 380,
+            "anchor": "center",
+            "image_ratio": 0.42
+          },
+          "center_float": {
+            "max_width_pt": 520,
+            "max_height_pt": 340,
+            "anchor": "center",
+            "image_ratio": 0.55
+          },
+          "hero_left": {
+            "max_width_pt": 400,
+            "max_height_pt": 380,
+            "anchor": "center",
+            "image_ratio": 0.42
+          }
+        },
+        "treatment": {
+          "corner_radius_pt": 4,
+          "border_role": "border_strong",
+          "shadow_role": "none"
+        },
+        "caption": {
+          "font_size": 12,
+          "alignment": "center",
+          "max_lines": 2,
+          "prefix": ""
+        }
+      },
+      "guidelines": [
+        "标题居中、对称构图",
+        "顶部/底部色带或细红线点缀",
+        "禁止霓虹、渐变、大圆角、贴纸阴影"
+      ]
+    }
+  },
+  "layout_mode_decision_tree": {
+    "note": "AI 根据图片宽高比自动选择 layout_mode",
+    "rules": [
+      {"aspect_gt": 1.6, "mode": "hero_top", "reason": "横图适合占上部全宽"},
+      {"aspect_lt": 0.8, "mode": "hero_right", "reason": "竖图适合占一侧"},
+      {"aspect_range": "0.8-1.6", "mode": "center_float", "reason": "方形图居中展示"},
+      {"width_lt": 64, "mode": "small_inline", "reason": "图标嵌入文字流"}
+    ]
+  }
+}

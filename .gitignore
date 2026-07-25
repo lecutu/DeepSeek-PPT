@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+.pytest_cache/
+
+# IDE
+.tokenicode/
+.agents/
+.vscode/
+.idea/
+
+# Local
+memory/
+MEMORY.md
+_test_idx/
+skills-lock.json
+
+# Third-party
+package/
+*.tgz
+
+# Personal notes
+文献检索工作流.md
+
+# Binary artifacts (don't ship test PPTs)
+*.pptx
+*.pptx.bak
+
+# Generated output
+ppt_reflex/renders/
+
+# C# service (separate project)
+ppt_reflex/PPTReflexService/
+
+# OS
+.DS_Store
+Thumbs.db
