@@ -450,8 +450,14 @@ def _render_payload(slide, x: float, y: float, w: float, h: float,
         shape = slide.shapes.add_textbox(Pt(x), Pt(y), Pt(w), Pt(h))
         tf = shape.text_frame
 
+    from pptx.enum.text import MSO_AUTO_SIZE
     tf.word_wrap = True
-    tf.auto_size = None  # no auto-shrink; overflow caught by engine pre-check
+    # 有填充色的形状/文本框 → 形状跟随文字撑高（SHAPE_TO_FIT_TEXT）
+    # 否则文字会被固定高度截断，深色底上的白字溢出后落在浅色页面背景上几乎不可见
+    if has_fill or p.shape_id:
+        tf.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
+    else:
+        tf.auto_size = None  # no auto-shrink; overflow caught by engine pre-check
 
     # Margins
     pad = Pt(12) if is_code else Pt(6)
