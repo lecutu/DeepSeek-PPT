@@ -33,6 +33,23 @@ class GridCanvas:
         self._profiles: dict[str, LayoutProfile] = {}
         self._entity_ids: set[str] = set()
         self._overlay_ids: set[str] = set()
+        self._decoration_payloads: list[dict] = []  # Phase 2 → serializer 直传通道
+
+    def register_decoration(self, deco_id: str, deco_type: str,
+                            x1: float, y1: float, x2: float, y2: float,
+                            line_color: tuple[int,int,int] = (0x66,0x66,0x66),
+                            line_width_pt: float = 1.5,
+                            text: str = "", font_size: float = 9.0,
+                            font_color: tuple[int,int,int] = (0x55,0x55,0x55),
+                            font_name: str = "Microsoft YaHei") -> None:
+        """Phase 2 装饰直传——pt 坐标精确渲染，不经 grid/cell 体系。"""
+        self._decoration_payloads.append({
+            "deco_id": deco_id, "deco_type": deco_type,
+            "x1": x1, "y1": y1, "x2": x2, "y2": y2,
+            "line_color": line_color, "line_width_pt": line_width_pt,
+            "text": text, "font_size": font_size, "font_color": font_color,
+            "font_name": font_name,
+        })
 
     # ═══════════════════════════════════════════════════════════
     # 常识层接口
@@ -233,7 +250,10 @@ class GridCanvas:
         from .serializer import grid_to_ppt
         tmp_path = ppt_path + ".tmp"
         try:
-            grid_to_ppt(self.info_grid, self.config, tmp_path)
+            grid_to_ppt(self.info_grid, self.config, tmp_path,
+                        phase1_rects=getattr(self, '_phase1_rects', None),
+                        phase1_payloads=getattr(self, '_phase1_payloads', None),
+                        decorations=getattr(self, '_decoration_payloads', []))
             os.replace(tmp_path, ppt_path)
         except Exception as e:
             if os.path.exists(tmp_path):

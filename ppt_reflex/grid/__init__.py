@@ -1,4 +1,10 @@
-"""grid/__init__.py - public API"""
+"""grid/__init__.py — 🔒 内部引擎。直接调用会被 Builder 绕过诊断回路，产生空白文字。
+AI Agent 请一律使用:
+    from ppt_reflex.builder import PPTBuilder
+    builder = PPTBuilder(template="academic")
+    builder.add_slide(...)
+    builder.build("out.pptx")
+"""
 
 from .types import (
     GridConfig, ContentType, Verdict, InfoCell,
@@ -23,6 +29,11 @@ from .profiles import infer_profile
 from .text_metrics import estimate_text_size, expand_bbox, OverflowReport
 from .aesthetics import AestheticsEngine, AestheticViolation, ElemStyle
 from .templates import TEMPLATES, TemplateProfile, get_template, AGENT_PROMPT
+from .plan import LayoutPlan, Region, Phase1Element, DecoIntent, DecorationSpec, PageElement, LayoutDiagnostic, FeedbackBundle
+from .phase1 import execute_phase1, audit_plan
+from .phase2 import execute_phase2
+from .orchestrator import layout_loop
+from .composition import global_composition_check
 
 __all__ = [
     # types
@@ -56,4 +67,9 @@ __all__ = [
     "AestheticsEngine", "AestheticViolation", "ElemStyle",
     # templates
     "TEMPLATES", "TemplateProfile", "get_template", "AGENT_PROMPT",
+    # two-layer five-phase architecture
+    "LayoutPlan", "Region", "Phase1Element", "DecoIntent",
+    "DecorationSpec", "PageElement", "LayoutDiagnostic", "FeedbackBundle",
+    "execute_phase1", "audit_plan", "execute_phase2",
+    "layout_loop", "global_composition_check",
 ]

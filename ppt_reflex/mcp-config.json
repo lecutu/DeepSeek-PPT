@@ -1,8 +1,9 @@
 {
+  "_comment": "Replace <REPO_ROOT> with the absolute path to this repository, e.g. D:/文献搜索员",
   "mcpServers": {
     "ppt-reflex": {
       "command": "python",
-      "args": ["D:/文献搜索员/ppt_reflex/mcp_server.py"],
+      "args": ["<REPO_ROOT>/ppt_reflex/mcp_server.py"],
       "env": {
         "PYTHONIOENCODING": "utf-8"
       }

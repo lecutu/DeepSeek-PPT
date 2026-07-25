@@ -1,7 +1,6 @@
 """quick test for aesthetics + text_metrics"""
-import sys; sys.path.insert(0, "D:/文献搜索员/ppt_reflex")
-from grid.aesthetics import AestheticsEngine, ElemStyle
-from grid.types import ContentType
+from ppt_reflex.grid.aesthetics import AestheticsEngine, ElemStyle
+from ppt_reflex.grid.types import ContentType
 
 eng = AestheticsEngine()
 

@@ -1,8 +1,7 @@
 """grid/tests/test_serializer.py — Grid ↔ PPT 往返一致性"""
 import sys, os
-sys.path.insert(0, "D:/文献搜索员/ppt_reflex")
-from grid.types import GridConfig, ContentType
-from grid.serializer import classify_shape, ppt_to_grid, grid_to_ppt
+from ppt_reflex.grid.types import GridConfig, ContentType
+from ppt_reflex.grid.serializer import classify_shape, ppt_to_grid, grid_to_ppt
 
 
 def test_classify_shape_types():
@@ -51,7 +50,7 @@ def test_classify_shape_types():
 def test_round_trip():
     """写入→读取→一致性检查"""
     import tempfile
-    from grid.info_grid import InformationGrid
+    from ppt_reflex.grid.info_grid import InformationGrid
 
     config = GridConfig()
     grid_in = InformationGrid(config)

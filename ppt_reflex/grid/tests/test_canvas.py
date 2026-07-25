@@ -1,9 +1,8 @@
 """grid/tests/test_canvas.py — try_place / commit / role-driven collision tests"""
 import sys, os
-sys.path.insert(0, "D:/文献搜索员/ppt_reflex")
-from grid.types import GridConfig, ContentType, Verdict, SemanticRole
-from grid.canvas import GridCanvas
-from grid.supply import Supply
+from ppt_reflex.grid.types import GridConfig, ContentType, Verdict, SemanticRole
+from ppt_reflex.grid.canvas import GridCanvas
+from ppt_reflex.grid.supply import Supply
 
 
 def test_try_place_empty_canvas():
@@ -18,7 +17,7 @@ def test_try_place_empty_canvas():
 def test_entity_on_entity_blocked():
     """两个 ENTITY 重叠 → BLOCK"""
     canvas = GridCanvas()
-    from grid.types import ElementPayload
+    from ppt_reflex.grid.types import ElementPayload
     canvas.try_place("s01", ContentType.TEXTBOX, ["A2","B2","C2","D2","A3","B3","C3","D3"],
         payload=ElementPayload(role=SemanticRole.ENTITY, text="Entity A"))
     r = canvas.try_place("s02", ContentType.TEXTBOX, ["C2","D2"],
@@ -33,7 +32,7 @@ def test_entity_on_entity_blocked():
 def test_annotation_on_entity_allowed():
     """ANNOTATION 叠 ENTITY → ALLOW（装饰叠实体）"""
     canvas = GridCanvas()
-    from grid.types import ElementPayload
+    from ppt_reflex.grid.types import ElementPayload
     canvas.try_place("s01", ContentType.TEXTBOX, ["A2","B2","C2","D2","A3","B3","C3","D3"],
         payload=ElementPayload(role=SemanticRole.ENTITY, text="band"))
     r = canvas.try_place("s02", ContentType.TEXT, ["A2","B2","C2"],
@@ -45,7 +44,7 @@ def test_annotation_on_entity_allowed():
 def test_connector_on_entity_allowed():
     """CONNECTOR 穿 ENTITY → ALLOW"""
     canvas = GridCanvas()
-    from grid.types import ElementPayload
+    from ppt_reflex.grid.types import ElementPayload
     canvas.try_place("s01", ContentType.TEXTBOX, ["A5","B5","C5","D5","E5","F5","G5","H5"],
         payload=ElementPayload(role=SemanticRole.ENTITY, text="S1 band"))
     # Arrow goes right through the band
@@ -59,7 +58,7 @@ def test_connector_on_entity_allowed():
 def test_emphasis_on_entity_allowed():
     """EMPHASIS（高亮框）叠 ENTITY → ALLOW"""
     canvas = GridCanvas()
-    from grid.types import ElementPayload
+    from ppt_reflex.grid.types import ElementPayload
     canvas.try_place("s01", ContentType.TEXTBOX, ["C3","D3","E3","F3","C4","D4","E4","F4"],
         payload=ElementPayload(role=SemanticRole.ENTITY, text="data"))
     r = canvas.try_place("highlight", ContentType.SHAPE, ["C3","D3","E3","F3","C4","D4","E4","F4"],
@@ -71,7 +70,7 @@ def test_emphasis_on_entity_allowed():
 def test_entity_on_backdrop_allowed():
     """ENTITY 叠 BACKDROP（底纹）→ ALLOW"""
     canvas = GridCanvas()
-    from grid.types import ElementPayload
+    from ppt_reflex.grid.types import ElementPayload
     canvas.try_place("bg", ContentType.BACKGROUND, ["A4","B4","C4"],
         payload=ElementPayload(role=SemanticRole.BACKDROP))
     r = canvas.try_place("s01", ContentType.TEXTBOX, ["A4","B4","C4"],
@@ -83,7 +82,7 @@ def test_entity_on_backdrop_allowed():
 def test_lock_template():
     """Locked template decor → no collision"""
     canvas = GridCanvas()
-    from grid.positioning import bbox_to_fine_cells
+    from ppt_reflex.grid.positioning import bbox_to_fine_cells
     fine_addrs = bbox_to_fine_cells(0, 0, 960, 30, canvas.config)
     canvas.info_grid.occupy(fine_addrs, "deco-logo", ContentType.SHAPE,
                             locked=True, source="template", role=SemanticRole.EMPHASIS)
@@ -103,7 +102,7 @@ def test_out_of_bounds():
 def test_free_suggestion():
     """实体冲突返回空闲区域建议"""
     canvas = GridCanvas()
-    from grid.types import ElementPayload
+    from ppt_reflex.grid.types import ElementPayload
     canvas.try_place("s01", ContentType.ANNOTATION, ["A1","B1","C1","D1","A2","B2","C2","D2",
         "A3","B3","C3","D3","A4","B4","C4","D4","A5","B5","C5","D5","A6","B6","C6","D6","A7","B7","C7","D7"])
     r = canvas.try_place("s02", ContentType.TEXTBOX, ["C4","D4","C5","D5"],
@@ -128,7 +127,7 @@ def test_checkpoint_rollback():
 def test_entity_and_overlay_tables():
     """entity_table() / overlay_table() 正确分类"""
     canvas = GridCanvas()
-    from grid.types import ElementPayload
+    from ppt_reflex.grid.types import ElementPayload
     canvas.try_place("e1", ContentType.TEXTBOX, ["B3","C3","B4","C4"],
         payload=ElementPayload(role=SemanticRole.ENTITY, text="band"))
     canvas.try_place("a1", ContentType.CONNECTOR, ["D3"],
@@ -150,7 +149,7 @@ def test_entity_and_overlay_tables():
 def test_pre_commit_role_mislabel_hint():
     """pre_commit_validation 对误标 ENTITY 的连接器给出 '改 role' 建议"""
     canvas = GridCanvas()
-    from grid.types import ElementPayload
+    from ppt_reflex.grid.types import ElementPayload
 
     # Put a band as ENTITY
     canvas.try_place("band", ContentType.TEXTBOX, ["D3","E3","D4","E4"],

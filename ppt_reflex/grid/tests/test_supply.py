@@ -1,9 +1,7 @@
 """grid/tests/test_supply.py — 输出格式 token 预算验证"""
-import sys
-sys.path.insert(0, "D:/文献搜索员/ppt_reflex")
-from grid.types import GridConfig, ContentType
-from grid.canvas import GridCanvas
-from grid.supply import Supply
+from ppt_reflex.grid.types import GridConfig, ContentType
+from ppt_reflex.grid.canvas import GridCanvas
+from ppt_reflex.grid.supply import Supply
 
 
 def test_level0_token_budget():

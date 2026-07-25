@@ -7,14 +7,12 @@
   4. AI 未填 role → 引擎给默认（文本=entity / connector=overlay）
   5. 相切不产生 advisory 噪声
 """
-import sys
-sys.path.insert(0, "D:/文献搜索员/ppt_reflex")
-from grid.types import (
+from ppt_reflex.grid.types import (
     GridConfig, ContentType, Verdict, SemanticRole, ElementPayload,
     Family, Strength, OverlapVerdict, OverlapPolicy, Advisory, POLICIES,
     family_of, _verdict_to_level,
 )
-from grid.canvas import GridCanvas
+from ppt_reflex.grid.canvas import GridCanvas
 
 
 # ═══════════════════════════════════════════════════════════

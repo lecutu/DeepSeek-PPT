@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ppt-reflex"
+version = "0.5.0"
+description = "PPT Reflex Engine — deterministic spatial QA + Agent repair loop + LLM decision interface"
+requires-python = ">=3.10"
+dependencies = [
+    "python-pptx>=0.6.21",
+]
+
+[project.optional-dependencies]
+com = ["pywin32>=305"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ppt_reflex*"]

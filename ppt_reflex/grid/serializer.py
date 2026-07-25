@@ -77,15 +77,15 @@ def ppt_to_grid(ppt_path: str, slide_index: int,
 # WRITE: InformationGrid → PPT
 # ═══════════════════════════════════════════════════════════
 
-def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str) -> None:
-    """Write InformationGrid state → PPT file, rendering ElementPayload content.
+def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str,
+               phase1_rects: dict | None = None,
+               phase1_payloads: dict | None = None,
+               decorations: list[dict] | None = None) -> None:
+    """渲染管线：Phase 1 pt 直传（首选）→ info_grid 回退（旧架构）→ 装饰层（后渲染）。
 
-    Each occupied element's bbox determines position. If payload is present,
-    text/fill/font/alignment are applied. Without payload, empty placeholder.
-    Multi-line code blocks get dark background + monospace font.
-    locked elements retain position only (template decoration).
-
-    All bbox coordinates are clamped to slide bounds before rendering.
+    phase1_rects: {elem_id: (x, y, w, h)} — Phase 1 精确 pt，渲染首选
+    phase1_payloads: {elem_id: (ContentType, ElementPayload)} — 渲染内容直传
+    decorations:  Phase 2 装饰列表
     """
     from pptx import Presentation
     from pptx.util import Pt, Emu
@@ -99,28 +99,66 @@ def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str) -> Non
     }
 
     occ = grid.all_occupied()
-    if not occ:
+    rects = phase1_rects or {}
+    payloads = phase1_payloads or {}
+    decos = decorations or []
+
+    if not occ and not rects and not decos:
         return
 
     prs = Presentation()
+    # 强制 16:9 宽屏，与 GridConfig canvas_w_pt=960/canvas_h_pt=540 对齐
+    from pptx.util import Pt as _Pt
+    prs.slide_width = _Pt(config.canvas_w_pt)
+    prs.slide_height = _Pt(config.canvas_h_pt)
     slide_layout = prs.slide_layouts[6]  # blank
     slide = prs.slides.add_slide(slide_layout)
 
+    # ── 信息层（先渲染 = 底层）──
+    rendered_ids: set[str] = set()
+
+    # 优先：Phase 1 精确 pt rects + payloads
+    for eid, (x, y, w, h) in rects.items():
+        rendered_ids.add(eid)
+        x, y, w, h = _clamp_bbox(x, y, w, h, config)
+        ct, payload = payloads.get(eid, (None, None))
+        if ct is None:
+            ct = _get_type_for_id(eid, occ.get(eid, set()), grid)
+        if payload is None and eid in occ:
+            cell_sample = grid.get_cell(next(iter(occ.get(eid, set())), ""))
+            if cell_sample:
+                payload = cell_sample.payload
+        lock_flag = False
+        if eid in occ:
+            cs = grid.get_cell(next(iter(occ.get(eid, set())), ""))
+            if cs:
+                lock_flag = cs.locked
+        if payload is not None and not lock_flag:
+            if ct == ContentType.IMAGE and payload.image_path:
+                _render_image(slide, x, y, w, h, payload)
+                continue
+            if ct == ContentType.CONNECTOR:
+                _render_connector(slide, payload, grid.config)
+                continue
+            _render_payload(slide, x, y, w, h, ct, payload, ALIGN_MAP)
+            continue
+
+        _render_fallback(slide, x, y, w, h, ct)
+
+    # 回退：info_grid 中未被 Phase 1 rects 覆盖的元素（旧架构兼容）
     for owner_id, fine_cells in occ.items():
+        if owner_id in rendered_ids:
+            continue
         bbox = _cells_union(fine_cells, grid.config)
         if bbox is None:
             continue
         x, y, w, h = bbox
-
-        # Clamp to slide bounds (兜底防止坐标爆炸/坍缩后的盲画)
         x, y, w, h = _clamp_bbox(x, y, w, h, config)
-
         content_type = _get_type_for_id(owner_id, fine_cells, grid)
         cell_sample = grid.get_cell(next(iter(fine_cells)))
         locked = cell_sample.locked if cell_sample else False
         payload = cell_sample.payload if cell_sample else None
 
-        # ── Render with payload if available ──
         if payload is not None and not locked:
             if content_type == ContentType.IMAGE and payload.image_path:
                 _render_image(slide, x, y, w, h, payload)
@@ -131,22 +169,32 @@ def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str) -> Non
             _render_payload(slide, x, y, w, h, content_type, payload, ALIGN_MAP)
             continue
 
-        # ── Fallback: empty placeholder (backward compatible) ──
-        if content_type == ContentType.TEXT:
-            box = slide.shapes.add_textbox(Pt(x), Pt(y), Pt(w), Pt(h))
-            box.text_frame.text = ""
-        elif content_type == ContentType.TEXTBOX:
-            box = slide.shapes.add_shape(1, Pt(x), Pt(y), Pt(w), Pt(h))
-            box.text_frame.text = ""
-        elif content_type == ContentType.IMAGE:
-            slide.shapes.add_picture(_placeholder_png(), Pt(x), Pt(y), Pt(w), Pt(h))
-        elif content_type == ContentType.SHAPE:
-            slide.shapes.add_shape(1, Pt(x), Pt(y), Pt(w), Pt(h))
-        else:
-            box = slide.shapes.add_textbox(Pt(x), Pt(y), Pt(w), Pt(h))
-            box.text_frame.text = ""
+        _render_fallback(slide, x, y, w, h, content_type)
+
+    # ── 装饰层（后渲染 = 顶层，不被信息层遮挡）──
+    for d in decos:
+        if d.get("deco_type") == "arrow" and d.get("x2"):
+            _render_connector_abs(slide, d, config, ALIGN_MAP)
 
     prs.save(ppt_path)
+
+
+def _render_fallback(slide, x, y, w, h, content_type):
+    """空占位形状（无 payload 时）。"""
+    from pptx.util import Pt
+    if content_type == ContentType.TEXT:
+        box = slide.shapes.add_textbox(Pt(x), Pt(y), Pt(w), Pt(h))
+        box.text_frame.text = ""
+    elif content_type == ContentType.TEXTBOX:
+        box = slide.shapes.add_shape(1, Pt(x), Pt(y), Pt(w), Pt(h))
+        box.text_frame.text = ""
+    elif content_type == ContentType.IMAGE:
+        slide.shapes.add_picture(_placeholder_png(), Pt(x), Pt(y), Pt(w), Pt(h))
+    elif content_type == ContentType.SHAPE:
+        slide.shapes.add_shape(1, Pt(x), Pt(y), Pt(w), Pt(h))
+    else:
+        box = slide.shapes.add_textbox(Pt(x), Pt(y), Pt(w), Pt(h))
+        box.text_frame.text = ""
 
 
 # ═══════════════════════════════════════════════════════════
@@ -267,12 +315,29 @@ def _render_connector(slide, payload: "ElementPayload", config: "GridConfig") ->
     Draws a straight line with arrowhead at target end.
 
     Anchor keywords: "top"|"bottom"|"left"|"right"|"center"
+
+    Priority: _abs_x1/_abs_y1 pt coords (Phase 2 direct) > cell-address derivation.
     """
     from pptx.util import Pt, Emu
     from pptx.dml.color import RGBColor
     from pptx.oxml.ns import qn
     from pptx.enum.shapes import MSO_CONNECTOR_TYPE
     from .positioning import parse_cell
+
+    # Phase 2 direct pt coords — bypass cell discretization
+    if payload._abs_x2 or payload._abs_y2:
+        sx, sy = payload._abs_x1, payload._abs_y1
+        ex, ey = payload._abs_x2, payload._abs_y2
+        sx = max(0, min(sx, config.canvas_w_pt - 1))
+        sy = max(0, min(sy, config.canvas_h_pt - 1))
+        ex = max(0, min(ex, config.canvas_w_pt - 1))
+        ey = max(0, min(ey, config.canvas_h_pt - 1))
+        connector = slide.shapes.add_connector(
+            MSO_CONNECTOR_TYPE.STRAIGHT, Pt(sx), Pt(sy), Pt(ex), Pt(ey))
+        connector.line.color.rgb = RGBColor(*payload.line_color)
+        connector.line.width = Pt(payload.line_width_pt)
+        _set_arrowhead(connector)
+        return
 
     fc = payload.connector_from.strip()
     tc = payload.connector_to.strip()
@@ -301,20 +366,60 @@ def _render_connector(slide, payload: "ElementPayload", config: "GridConfig") ->
     connector.line.color.rgb = RGBColor(*payload.line_color)
     connector.line.width = Pt(payload.line_width_pt)
 
-    # Arrowhead at target end
+    _set_arrowhead(connector)
+
+
+def _set_arrowhead(connector) -> None:
+    """Set triangle arrowhead at target end."""
+    from lxml import etree
+    from pptx.oxml.ns import qn
     spPr = connector._element.find(qn('p:spPr'))
     if spPr is not None:
         ln = spPr.find(qn('a:ln'))
         if ln is not None:
             tail = ln.find(qn('a:tailEnd'))
             if tail is None:
-                from lxml import etree
                 tail = etree.SubElement(ln, qn('a:tailEnd'))
             tail.set('type', 'triangle')
             tail.set('w', 'med')
             tail.set('len', 'med')
 
 
+def _render_connector_abs(slide, d: dict, config: "GridConfig", align_map: dict) -> None:
+    """Render Phase 2 decoration arrow with absolute pt coords + optional text label."""
+    from pptx.util import Pt
+    from pptx.dml.color import RGBColor
+    from pptx.enum.shapes import MSO_CONNECTOR_TYPE
+
+    x1 = max(0, min(d["x1"], config.canvas_w_pt - 1))
+    y1 = max(0, min(d["y1"], config.canvas_h_pt - 1))
+    x2 = max(0, min(d["x2"], config.canvas_w_pt - 1))
+    y2 = max(0, min(d["y2"], config.canvas_h_pt - 1))
+
+    connector = slide.shapes.add_connector(
+        MSO_CONNECTOR_TYPE.STRAIGHT, Pt(x1), Pt(y1), Pt(x2), Pt(y2))
+    connector.line.color.rgb = RGBColor(*d["line_color"])
+    connector.line.width = Pt(d["line_width_pt"])
+    _set_arrowhead(connector)
+
+    # ── Text label at midpoint ──
+    if d.get("text", "").strip():
+        mx = (x1 + x2) / 2
+        my = (y1 + y2) / 2
+        lw = max(36, d.get("font_size", 9) * len(d["text"].replace("\n", "")) * 0.65)
+        lh = max(18, d.get("font_size", 9) * d["text"].count("\n") * 1.5 + d.get("font_size", 9) * 2)
+        lx = max(0, min(mx - lw / 2, config.canvas_w_pt - lw))
+        ly = max(0, min(my - lh / 2, config.canvas_h_pt - lh))
+        box = slide.shapes.add_textbox(Pt(lx), Pt(ly), Pt(lw), Pt(lh))
+        box.text_frame.word_wrap = True
+        tf = box.text_frame
+        for i, line in enumerate(d["text"].split("\n")):
+            para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+            para.text = line
+            para.font.name = d.get("font_name", "Calibri")
+            para.font.size = Pt(d.get("font_size", 9))
+            para.font.color.rgb = RGBColor(*d["font_color"])
+            para.alignment = align_map.get("CENTER", 1)
 # ═══════════════════════════════════════════════════════════
 # RENDER: TEXT / TEXTBOX (with shape_id)
 # ═══════════════════════════════════════════════════════════
@@ -358,6 +463,14 @@ def _render_payload(slide, x: float, y: float, w: float, h: float,
     # ── Text content ──
     text = p.text.strip()
     if not text:
+        # 有框无文 → 占位标记，防静默白框
+        text = "(no text)"
+        para = tf.paragraphs[0]
+        run = para.add_run()
+        run.text = text
+        run.font.size = Pt(max(8, p.font_size * 0.8))
+        run.font.color.rgb = RGBColor(0xCC, 0x33, 0x33)  # 红色警告
+        run.font.italic = True
         return
 
     lines = text.split("\n")

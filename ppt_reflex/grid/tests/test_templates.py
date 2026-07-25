@@ -1,6 +1,5 @@
-import sys; sys.path.insert(0, "D:/文献搜索员/ppt_reflex")
-from grid.templates import TEMPLATES, get_template
-from grid.aesthetics import hex_to_rgb, contrast_ratio, luminance_L
+from ppt_reflex.grid.templates import TEMPLATES, get_template
+from ppt_reflex.grid.aesthetics import hex_to_rgb, contrast_ratio, luminance_L
 
 print(f"{len(TEMPLATES)} templates loaded\n")
 

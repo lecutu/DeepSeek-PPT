@@ -1,10 +1,8 @@
 """grid/tests/test_matrix.py — role-driven collision tests"""
-import sys
-sys.path.insert(0, "D:/文献搜索员/ppt_reflex")
-from grid.types import ContentType, Verdict, Conflict, GridConfig, SemanticRole
-from grid.matrix import InteractionMatrix
-from grid.info_grid import InformationGrid
-from grid.positioning import bbox_to_fine_cells
+from ppt_reflex.grid.types import ContentType, Verdict, Conflict, GridConfig, SemanticRole
+from ppt_reflex.grid.matrix import InteractionMatrix
+from ppt_reflex.grid.info_grid import InformationGrid
+from ppt_reflex.grid.positioning import bbox_to_fine_cells
 
 
 def test_entity_overlap_blocked():

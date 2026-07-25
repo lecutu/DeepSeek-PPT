@@ -272,8 +272,9 @@ def evaluate(input_path: str, output_path: str | None = None):
 
 
 if __name__ == "__main__":
-    input_path = "D:/文献搜索员/ppt_reflex/cases/broken.pptx"
-    output_path = "D:/文献搜索员/ppt_reflex/cases/fixed-output.pptx"
+    base = Path(__file__).parent
+    input_path = str(base / "cases" / "broken.pptx")
+    output_path = str(base / "cases" / "fixed-output.pptx")
 
     if not Path(input_path).exists():
         print(f"Test file not found: {input_path}")

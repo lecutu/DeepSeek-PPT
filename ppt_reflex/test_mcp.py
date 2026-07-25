@@ -1,6 +1,6 @@
 """End-to-end MCP Server tool call test."""
-import json, sys
-sys.path.insert(0, '.')
+import json, sys, os
+sys.path.insert(0, os.path.dirname(__file__))
 from mcp_server import PPTReflexMCPServer
 
 s = PPTReflexMCPServer()
@@ -26,7 +26,7 @@ def assert_in(sub, container, msg=""):
 # 1
 print("=== 1. Open Presentation ===")
 test("Open pptx", lambda: (
-    (r := s.call_tool('open_presentation', {'path': 'D:/文献搜索员/ppt_reflex/cases/broken.pptx'}))
+    (r := s.call_tool('open_presentation', {'path': os.path.join(os.path.dirname(__file__), 'cases', 'broken.pptx')}))
     and assert_eq(r['status'], 'ok')
     and assert_eq(r['slides'], 15)
     and print(f"      {r['slides']} slides, {r['elements']} elements on slide 0")

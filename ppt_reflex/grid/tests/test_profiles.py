@@ -1,9 +1,7 @@
 """grid/tests/test_profiles.py — 版式推断正确性"""
-import sys
-sys.path.insert(0, "D:/文献搜索员/ppt_reflex")
-from grid.types import GridConfig, ContentType
-from grid.canvas import GridCanvas
-from grid.profiles import infer_profile
+from ppt_reflex.grid.types import GridConfig, ContentType
+from ppt_reflex.grid.canvas import GridCanvas
+from ppt_reflex.grid.profiles import infer_profile
 
 
 def test_auto_profile_footer():

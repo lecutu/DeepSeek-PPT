@@ -237,7 +237,7 @@ class GridConfig:
 class InfoCell:
     owner_id: str | None = None
     content_type: ContentType | None = None
-    role: SemanticRole = SemanticRole.ENTITY
+    role: SemanticRole | None = None  # None = AI 未指定；引擎用族扶手补
     z_order: int = 0
     locked: bool = False
     source: str = "unknown"
@@ -255,7 +255,7 @@ class InfoCell:
 @dataclass
 class ElementPayload:
     """AI 填的渲染负载。role 是语义理解的外化——引擎据此决定碰撞规则。"""
-    role: SemanticRole = SemanticRole.ENTITY
+    role: SemanticRole | None = None  # None = AI 未指定；引擎用族扶手补
 
     # ── 文本 ──
     text: str = ""
@@ -282,6 +282,11 @@ class ElementPayload:
     connector_anchor_to: str = "center"
     line_color: tuple[int,int,int] = (0x66, 0x66, 0x66)
     line_width_pt: float = 1.5
+    # Phase 2 直传（pt 坐标，绕过 cell 离散化精度损失）
+    _abs_x1: float = 0.0
+    _abs_y1: float = 0.0
+    _abs_x2: float = 0.0
+    _abs_y2: float = 0.0
 
 
 @dataclass

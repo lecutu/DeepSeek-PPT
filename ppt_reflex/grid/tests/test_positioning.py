@@ -1,11 +1,9 @@
 """grid/tests/test_positioning.py"""
-import sys
-sys.path.insert(0, "D:/文献搜索员/ppt_reflex")
-from grid.positioning import (
+from ppt_reflex.grid.positioning import (
     cell_name, parse_cell, cells_to_bbox, bbox_to_coarse_cells,
     bbox_to_fine_cells, cell_range, is_cell_in_bounds,
 )
-from grid.types import GridConfig
+from ppt_reflex.grid.types import GridConfig
 
 
 def test_cell_name():

@@ -222,4 +222,5 @@ def make_test_pptx(output_path: str):
 
 
 if __name__ == "__main__":
-    make_test_pptx("D:/文献搜索员/ppt_reflex/cases/broken.pptx")
+    target = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cases", "broken.pptx")
+    make_test_pptx(target)
