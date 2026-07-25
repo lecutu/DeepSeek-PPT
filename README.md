@@ -93,32 +93,6 @@ AI declares intent (PPTBuilder)
 └──────────────────────────────────────────┘
 ```
 
-## How It Prevents Common LLM Failures
-
-### 1. Aspect ratio destroyed
-LLM: `add_picture(path, x, y, w, h)` — fills the box, ignores 1920×1080 becoming 400×400.
-ppt_reflex: PIL reads natural dimensions → `scale = min(w/natW, h/natH)` → invariant check. **Non-uniform scale → FATAL.**
-
-### 2. Invisible text
-LLM: `font.color = RGBColor(0x22, 0x22, 0x44)` on `fill = RGBColor(0x1A, 0x1A, 0x2E)`. Both dark, zero contrast.
-ppt_reflex: `_resolve_style()` auto-switches to white on dark fills. AestheticsEngine flags `dark_bg_dark_text`.
-
-### 3. Box too short for text
-LLM: "wrote a 3-line warning in a 30pt box, second line fell out."
-ppt_reflex: `_estimate_height()` computes text demand before allocating height. `max(preferred, text_needed)`. Shapes auto-grow with `SHAPE_TO_FIT_TEXT`.
-
-### 4. Overflow = silent data loss
-LLM: 300 chars at 14pt in a 200pt box — PowerPoint clips it. No error. Content gone.
-ppt_reflex: `text_metrics` pre-estimates every string. `overflow_v` diagnostic with fix: shrink font / widen box / split slide.
-
-### 5. Six slides, six palettes
-LLM: picks `RGBColor(...)` ad-hoc per slide. Deck has no design identity.
-ppt_reflex: 6 presets lock color/font/shape. Pick one. Everything inherits.
-
-### 6. Zero diagnostics
-LLM: "It looks wrong." That's it. That's the error message.
-ppt_reflex: `build()` returns `{ok, diagnostics: [{phase, kind, severity, element_id, fix_options}]}`. Structure, not hand-waving.
-
 ## Style Presets
 
 | Preset | Mood | Image Mode | Image Ratio | Corners | Shadow |
