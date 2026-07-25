@@ -26,21 +26,25 @@ def _estimate_width(elem, uw: float) -> float:
 
 
 def _estimate_height(elem, ew: float) -> float:
-    if elem.preferred_height is not None:
-        return elem.preferred_height
     payload = elem.payload
     # 图片是锚点元素——若无显式 preferred_height，占据整个区域高度
     # contain-fit 渲染层再等比缩放到不会溢出
     if elem.content_type == ContentType.IMAGE:
         return 9999.0  # 会被 _place_stack() 的 min(eh, page_h - ey) 夹回区域高
+    # 先算文字实际需要的高度
+    text_h = 30.0
     if payload and payload.text.strip():
         _, _, _, rh = estimate_text_size(
             payload.text, font_pt=payload.font_size,
             line_spacing=payload.line_spacing,
             box_width_pt=ew, box_height_pt=9999.0, word_wrap=True,
         )
-        return max(rh, payload.font_size * 1.5)
-    return 30.0
+        text_h = max(rh, payload.font_size * 1.5)
+    # preferred_height 作为最小高度，不是固定高度
+    # 有填充色的 box 文字多行时需要空间撑高，否则白字溢出到浅色背景
+    if elem.preferred_height is not None:
+        return max(elem.preferred_height, text_h)
+    return text_h
 
 
 def _commit_element(elem, ex, ey, ew, eh, plan, canvas, locked, region):

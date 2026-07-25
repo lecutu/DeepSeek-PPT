@@ -277,7 +277,7 @@ class PPTBuilder:
         return self._s("页脚", text, region, "footer")
     def box(self, text: str, style: str = "正文", region: str = "main",
             fill_color: tuple|None = None, shape_id: str = "rounded_rectangle",
-            ph: float = 30, align_h: str = "left", allow_shrink: bool = False) -> _Spec:
+            ph: float|None = None, align_h: str = "left", allow_shrink: bool = False) -> _Spec:
         return self._s(style, text, region, "textbox", fill_color=fill_color,
                        shape_id=shape_id, ph=ph, align_h=align_h, allow_shrink=allow_shrink)
     def shape(self, shape_id: str, region: str = "main",
