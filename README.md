@@ -7,39 +7,50 @@ The key insight: it's not a one-way pipeline. It's a **closed loop**. AI declare
 ## The Agent-Engine Loop
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    AI AGENT                             │
-│  "title centered, image contain-fit,                     │
-│   dark box for key finding, 3 bullets below"            │
-│                       │                                  │
-│            declares intent (PPTBuilder)                 │
-│                       ▼                                  │
-│  ┌─────────────────────────────────────────────┐        │
-│  │              ENGINE                          │        │
-│  │  Three-layer canvas / five-phase pipeline    │        │
-│  │  Rendering not yet executed                 │        │
-│  │                       │                      │        │
-│  │  Computes: geometry · contrast · overflow    │        │
-│  │  Returns: per-element diagnostics            │        │
-│  │                       ▼                      │        │
-│  │  { "overflow_v": 12pt, "elem": "box_3",      │        │
-│  │    "fixes": ["shrink → 11pt",                │        │
-│  │              "widen → +40pt"] }              │        │
-│  └─────────────────────────────────────────────┘        │
-│                       │                                  │
-│            AI reads diagnostics                         │
-│            AI decides: "widen to +40pt"                 │
-│            AI re-enters pipeline                        │
-│                       │                                  │
-│                       ▼                                  │
-│            Engine renders → .pptx                       │
-│            build().ok == true → guaranteed correct      │
-└─────────────────────────────────────────────────────────┘
+  AI AGENT                            ENGINE
+  ─────────                           ──────
+  declares intent                     computes layout
+  ("title, 3 bullets,                 (geometry, contrast,
+   image hero_right")                 overflow, density)
+        │                                    │
+        └───────────►  PPTBuilder  ──────────►│
+                                              │
+                                    5-phase pipeline
+                                    AestheticsEngine
+                                    pre-commit check
+                                              │
+        ◄────────  diagnostics  ◄─────────────┘
+        │         (structured JSON)
+        │
+  reads diagnostics
+  decides fix
+  ("widen box_3 by 40pt")
+        │
+        │   ◄══════  loop (until ok)  ═══════►  re-enters pipeline
+        │
+        ▼
+  build().ok = true  ──►  .pptx written, guaranteed correct
 ```
 
-**This is the DeepSeek difference.** A vision model sees the output and says "looks wrong." DeepSeek has no vision — but it doesn't need it. The engine provides machine-readable diagnostics at every phase. DeepSeek reads them like a compiler reading warnings, chooses the fix, and re-runs. The loop closes.
+**It's not "AI generates, human fixes." It's "AI declares, engine checks, AI reads diagnostics, AI decides, loop."** No vision. No manual inspection. Just structured data flowing between agent and solver.
 
-Claude and GPT-4o can do this too. Vision is a bonus, not a dependency.
+The engine speaks in compiler-style diagnostics:
+
+```json
+{
+  "elem_id": "box_3",
+  "kind": "overflow_v",
+  "message": "text needs 52pt, box is 30pt — 22pt overflow",
+  "severity": "warning",
+  "options": [
+    "shrink font to 11pt",
+    "widen region to +40pt",
+    "split text to next slide"
+  ]
+}
+```
+
+Every LLM can read this. DeepSeek reads it like a compiler reading warnings — chooses the fix, re-runs. Claude reads it and optionally inspects the rendered slide with vision. Either way, the loop closes through text.
 
 ## Why Traditional AI → PPTX Breaks
 
