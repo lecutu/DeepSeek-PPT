@@ -50,7 +50,15 @@ b.divider(region="main", color=(34,211,238), width_pt=2.0)   # horizontal rule
 
 `hero_top` `hero_right` `hero_left` `center_float` `small_inline` `grid_2x2` `grid_1x3`
 
-Or auto-infer: `b.auto_layout_mode("img.jpg")`
+Or let the engine infer: `b.auto_layout_mode("img.jpg")` — picks mode from aspect ratio:
+
+| Aspect ratio | Auto mode | What happens |
+|:--|:--|:--|
+| >1.6 (wide / panorama) | `hero_top` | full-width banner |
+| <0.8 (tall / portrait) | `hero_right` | right-side column |
+| 0.8–1.6 (square / screenshot) | `center_float` | centered, contain-fit, never cropped |
+
+**Screenshots, irregular crops, phone captures — just pass the file.** `fit_mode="fit"` is default: image is always fully visible, aspect ratio preserved, nothing cropped.
 
 ## add_slide — full signature
 
