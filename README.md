@@ -163,12 +163,13 @@ for d in result["diagnostics"]:
 
 | Model | Vision? | Works? | The Loop |
 |:--|:--|:--|:--|
-| **DeepSeek V3 / R1** | No | ✅ Best | Reads diagnostics → decides fix → re-enters. No vision needed. |
-| **Claude (Opus/Sonnet)** | Yes | ✅ Excellent | Vision adds bonus: sees the slide, correlates with diagnostics. |
-| **GPT-4o / GPT-4.1** | Yes | ✅ Excellent | Same. Structured output mode maps directly to diagnostic schema. |
-| **Gemini 2.5** | Yes | ✅ Excellent | Full compatibility. |
-| **Qwen / Llama / Mistral** | Varies | ✅ Works | Any model that writes Python and reads JSON. |
-| **Ollama / local models** | Usually no | ✅ Works | Designed for this. The loop works entirely through text. |
+| **DeepSeek V4 / R2** | No | ✅ Best | Reads diagnostics → decides fix → re-enters. No vision needed. |
+| **Claude Fable 5 / Opus 5 / Sonnet 5** | Yes | ✅ Excellent | Vision adds bonus: sees the slide, correlates with diagnostics. |
+| **GPT-5 / ChatGPT 5.6** | Yes | ✅ Excellent | Structured output mode maps directly to diagnostic schema. |
+| **Gemini 3.1 Pro** | Yes | ✅ Excellent | Full compatibility. |
+| **Grok 3** | Yes | ✅ Works | Any model that writes Python and reads JSON. |
+| **Qwen 3 / Llama 4 / Mistral Large 3** | Varies | ✅ Works | Open-weight models — loop works entirely through text. |
+| **Ollama / local models** | Usually no | ✅ Works | Designed for this. No cloud, no vision, no problem. |
 
 ## Template Intelligence — Semantic Contract, Not Just Colors
 
