@@ -1,36 +1,67 @@
-# ppt_reflex — Blind-Proof PowerPoint. No Vision Required.
+# ppt_reflex — Blind-Proof PowerPoint. No Vision Needed.
 
-**DeepSeek can't see images. GPT-4o can't preview `.pptx`. Every LLM is blind to its own PowerPoint output — it writes `python-pptx` code, crosses its fingers, and hopes. ppt_reflex removes the hope. The engine is a deterministic constraint solver: AI declares intent, engine guarantees correctness. You don't need to see the output to know it's right.**
+**DeepSeek can't see images. Every LLM is blind to its own `.pptx` output — it writes code, crosses its fingers, and hopes. Other tools solve this by making the AI guess harder. ppt_reflex doesn't guess. It runs a real constraint-solving engine, returns structured diagnostics the AI can read and act on, and guarantees visual correctness before the file is written.**
 
-Works with any LLM. Works *especially* well with DeepSeek, because the engine does the seeing for you.
+The key insight: it's not a one-way pipeline. It's a **closed loop**. AI declares intent → engine computes layout → engine returns per-element diagnostics → AI reads them, decides what to fix → re-enters the pipeline. The AI doesn't need to see. It needs to read. And every LLM — DeepSeek included — can read structured JSON.
 
-## Why This Exists
-
-Traditional AI → PowerPoint workflow:
+## The Agent-Engine Loop
 
 ```
-AI writes python-pptx code → opens .pptx → "why is the image stretched?"
-                                            → "why is that text invisible?"
-                                            → "why is the box only 30pt tall?"
-                                            → edit code, regenerate, repeat
+┌─────────────────────────────────────────────────────────┐
+│                    AI AGENT                             │
+│  "title centered, image contain-fit,                     │
+│   dark box for key finding, 3 bullets below"            │
+│                       │                                  │
+│            declares intent (PPTBuilder)                 │
+│                       ▼                                  │
+│  ┌─────────────────────────────────────────────┐        │
+│  │              ENGINE                          │        │
+│  │  Three-layer canvas / five-phase pipeline    │        │
+│  │  Rendering not yet executed                 │        │
+│  │                       │                      │        │
+│  │  Computes: geometry · contrast · overflow    │        │
+│  │  Returns: per-element diagnostics            │        │
+│  │                       ▼                      │        │
+│  │  { "overflow_v": 12pt, "elem": "box_3",      │        │
+│  │    "fixes": ["shrink → 11pt",                │        │
+│  │              "widen → +40pt"] }              │        │
+│  └─────────────────────────────────────────────┘        │
+│                       │                                  │
+│            AI reads diagnostics                         │
+│            AI decides: "widen to +40pt"                 │
+│            AI re-enters pipeline                        │
+│                       │                                  │
+│                       ▼                                  │
+│            Engine renders → .pptx                       │
+│            build().ok == true → guaranteed correct      │
+└─────────────────────────────────────────────────────────┘
 ```
 
-Every iteration requires **human eyes** to spot the problem. If you're using DeepSeek (no vision), you're stuck. Even Claude/GPT users waste 3–5 rounds fixing layout bugs the AI can't detect because it has no `.pptx` renderer.
+**This is the DeepSeek difference.** A vision model sees the output and says "looks wrong." DeepSeek has no vision — but it doesn't need it. The engine provides machine-readable diagnostics at every phase. DeepSeek reads them like a compiler reading warnings, chooses the fix, and re-runs. The loop closes.
 
-**ppt_reflex flips this**: the engine validates everything *before* the file is written. AI says what to put where. Engine computes safe geometry, checks contrast, enforces aspect ratios. Diagnostics come back as structured data — no eyes needed.
+Claude and GPT-4o can do this too. Vision is a bonus, not a dependency.
 
-## The Blind-Model Problem (and Solution)
+## Why Traditional AI → PPTX Breaks
 
-| What LLMs can't see | What ppt_reflex guarantees |
+| What the AI writes | What actually happens | Why the AI can't know |
+|:--|:--|:--|
+| `add_picture(path, x, y, w, h)` | Image stretches to fill, aspect ratio destroyed | No `.pptx` renderer in the loop |
+| `font.color = RGB(0x22, 0x22, 0x44)` | Invisible on dark background | No WCAG contrast check |
+| `add_textbox(x, y, 200, 30, text)` | 3-line text in 30pt box — 2 lines fall out | No text-metrics pre-computation |
+| `fill = RGBColor(0x1A, 0x1A, 0x2E)` | Slide 3 uses a different blue than slide 1 | No cross-slide consistency check |
+
+Each failure requires a **human** to look at the file, spot the bug, and describe it to the AI. This works for one bug. It doesn't scale to 150+ per deck.
+
+## What ppt_reflex Guarantees
+
+| Guarantee | How |
 |:--|:--|
-| Image stretched 2× horizontally — aspect ratio destroyed | **Contain-fit invariant**: `\|final_w/final_h − aspect\| ≤ 0.001`. Any violation = FATAL, refused. |
-| Dark blue text on dark gray background — invisible | **WCAG AA enforced**: contrast ratio ≥ 4.5:1. `invisible_text` = BLOCK. Dark fill → auto white text. |
-| 300 characters in a 200pt-wide box — silently clipped | **text_metrics**: pre-renders every string, estimates real pixel dimensions, reports overflow with fix options. |
-| Multi-line callout box assigned `h=30pt` — text leaks out | **min-height semantics**: `_estimate_height()` computes text demand first, then `max(ph, text_h)`. Shapes auto-grow. |
-| 6 slides, 6 different color palettes — no one noticed | **6 presets lock everything**: colors, fonts, shapes, image treatments. Pick once, enforced everywhere. |
-| "Something looks wrong" — no diagnostic | **Structured diagnostics per build**: phase, kind, severity, element ID, fix suggestions. Machine-readable. |
-
-**Result**: if `build()` returns `ok: true`, the PPTX is visually correct. Guaranteed. No visual inspection required.
+| **Aspect ratio preserved** | PIL reads natural dimensions → `scale = min(w/natW, h/natH)` → invariant: `|final ratio − original| ≤ 0.001`. Violation = FATAL. |
+| **No invisible text** | WCAG AA contrast ratio ≥ 4.5:1. Dark fill → auto white text. `invisible_text` = BLOCK. |
+| **Box grows with content** | `_estimate_height()` computes text demand before allocating height. `max(preferred, text_needed)`. Shapes auto-grow. |
+| **Overflow detected, not hidden** | `text_metrics` pre-estimates rendered dimensions of every string. Reports `overflow_v` / `overflow_h` with fix options. |
+| **Design consistency** | 6 presets lock color, font, shape, image treatment. Pick once, enforced everywhere. |
+| **Structured diagnostics** | Every build returns `{ok, diagnostics: [{phase, kind, severity, elem_id, fix_options}]}`. Machine-readable. AI-actionable. |
 
 ## Quick Start
 
@@ -46,7 +77,7 @@ b.add_slide("Cover",
         b.text("Kanamori et al. (2011) DOI: 10.1016/j.jcis.2011.02.027", style="注释"),
     ])
 
-b.add_slide("Background",
+b.add_slide("Findings",
     regions=[("hdr", 60, 30, 840, 40, 1), ("left", 60, 90, 450, 400, 2), ("right", 540, 90, 360, 200, 3)],
     elements=[
         b.text("Why Hierarchical Porosity?", style="小标题", region="hdr"),
@@ -58,62 +89,86 @@ b.add_slide("Background",
 
 result = b.build("output.pptx")
 # → {"ok": True, "summary": "128 issues (0 errors, 127 warnings)"}
+# AI reads result, sees warnings it can act on, re-enters if needed.
 ```
-
-One entry point. Zero engine concepts exposed. Any LLM that can write Python can use this.
 
 ## Architecture
 
 ```
-AI declares intent (PPTBuilder)
+PPTBuilder.add_slide()  ──  AI declares regions + elements + arrow intents
         │
         ▼
-┌──────────────────────────────────────────┐
-│            THREE-LAYER CANVAS             │
-│  Geometric   — coordinates / clamp       │
-│  Semantic    — role / entity vs overlay  │
-│  Commonsense — overlap policy / WCAG     │
-└──────────────────────────────────────────┘
+┌───────────────────────────────────────────────────┐
+│              THREE-LAYER CANVAS                    │
+│  Geometric   — coordinates, clamp, containment     │
+│  Semantic    — entity vs overlay role tables       │
+│  Commonsense — WCAG contrast, overlap policy       │
+└───────────────────────────────────────────────────┘
         │
         ▼
-┌──────────────────────────────────────────┐
-│           FIVE-PHASE PIPELINE             │
-│  Phase 0   — declare → LayoutPlan        │
-│  Phase 0.5 — validate regions            │
-│  Phase 1   — info layer (stack/inline)   │
-│  Phase 2   — decoration (arrows)         │
-│  Phase 2.5 — global composition          │
-│       │                                   │
-│  AestheticsEngine (10+ WCAG rules)       │
-│  Pre-commit validation                   │
-│  Structured diagnostics → AI reads them  │
-│       │                                   │
-│       ▼                                   │
-│  _render_slide() → .pptx                 │
-└──────────────────────────────────────────┘
+┌───────────────────────────────────────────────────┐
+│             FIVE-PHASE PIPELINE                    │
+│  Phase 0   — intent → LayoutPlan                  │
+│  Phase 0.5 — region validation                    │
+│  Phase 1   — info layer: stack/inline placement    │
+│  Phase 2   — decoration: arrow routing            │
+│  Phase 2.5 — global composition: whitespace/density│
+│       │                                            │
+│  AestheticsEngine (10+ WCAG rules)                │
+│  Pre-commit validation                            │
+│       │                                            │
+│       ▼                                            │
+│  Structured diagnostics → AI reads, decides, loops │
+│       │                                            │
+│       ▼                                            │
+│  _render_slide() → .pptx                          │
+└───────────────────────────────────────────────────┘
 ```
 
-## Style Presets
+## The Loop in Action
 
-| Preset | Mood | Image Mode | Image Ratio | Corners | Shadow |
-|:--|:--|:--|:--|:--|:--|
-| `academic_rigorous` | Rigorous, restrained | center_float | ≤60% | 0 | none |
-| `corporate_minimal` | Clean, trustworthy | hero_right | ≤40% | 8pt | soft |
-| `tech_dark` | Immersive, dramatic | hero_right | ≤50% | 12pt | glow |
-| `magazine_editorial` | Bold, narrative | hero_top | 50-70% | 0 | none |
-| `creative_vibrant` | Playful, friendly | center_float | ≤50% | 20pt | sticker |
-| `government_solemn` | Authoritative, formal | hero_top | ≤45% | 4pt | none |
+```python
+b = PPTBuilder(template="academic", style="academic_rigorous")
+b.add_slide("Results", regions=[("main", 60, 60, 840, 420)],
+    elements=[
+        b.text("Comprehensive Analysis of SiOC Anode Performance", style="标题"),
+        b.text("300-character abstract that won't fit in this region...", style="正文"),
+        b.image("sem_fig.png", layout_mode="hero_top"),
+    ])
+
+result = b.build("draft.pptx")
+# → {"ok": True, "summary": "6 issues (0 errors, 6 warnings)"}
+
+# AI reads diagnostics:
+for d in result["diagnostics"]:
+    if d["kind"] == "overflow_v":
+        print(f"{d['elem_id']}: {d['message']}")
+        for fix in d.get("options", []):
+            print(f"  → {fix}")
+        # AI decides: "split the abstract to slide 2"
+```
 
 ## LLM Compatibility
 
-| Model | Vision? | Works with ppt_reflex? | Notes |
+| Model | Vision? | Works? | The Loop |
 |:--|:--|:--|:--|
-| **DeepSeek V3 / R1** | No | ✅ Best fit | Engine provides the visual feedback DeepSeek lacks. Zero blind spots. |
-| **Claude (Opus/Sonnet)** | Yes | ✅ Excellent | Vision adds bonus: Claude can review diagnostics + suggest layout tweaks. |
-| **GPT-4o / GPT-4.1** | Yes | ✅ Excellent | Same as Claude. Vision is a complement, not a requirement. |
+| **DeepSeek V3 / R1** | No | ✅ Best | Reads diagnostics → decides fix → re-enters. No vision needed. |
+| **Claude (Opus/Sonnet)** | Yes | ✅ Excellent | Vision adds bonus: sees the slide, correlates with diagnostics. |
+| **GPT-4o / GPT-4.1** | Yes | ✅ Excellent | Same. Structured output mode maps directly to diagnostic schema. |
 | **Gemini 2.5** | Yes | ✅ Excellent | Full compatibility. |
-| **Qwen / Llama / Mistral** | Varies | ✅ Works | Any model that writes valid Python. |
-| **Local models (Ollama)** | Usually no | ✅ Works | ppt_reflex was designed for this case. |
+| **Qwen / Llama / Mistral** | Varies | ✅ Works | Any model that writes Python and reads JSON. |
+| **Ollama / local models** | Usually no | ✅ Works | Designed for this. The loop works entirely through text. |
+
+## Style Presets
+
+| Preset | Mood | Image Mode | Image Ratio | Corners |
+|:--|:--|:--|:--|:--|
+| `academic_rigorous` | Rigorous, restrained | center_float | ≤60% | 0 |
+| `corporate_minimal` | Clean, trustworthy | hero_right | ≤40% | 8pt |
+| `tech_dark` | Immersive, dramatic | hero_right | ≤50% | 12pt |
+| `magazine_editorial` | Bold, narrative | hero_top | 50–70% | 0 |
+| `creative_vibrant` | Playful, friendly | center_float | ≤50% | 20pt |
+| `government_solemn` | Authoritative, formal | hero_top | ≤45% | 4pt |
 
 ## Install
 
@@ -124,26 +179,27 @@ cd deepseek-ppt-maker
 pip install -e .
 ```
 
-Python 3.10+. Two dependencies: `python-pptx`, `Pillow`.
+Python 3.10+. Two deps: `python-pptx`, `Pillow`.
 
 ## Project Layout
 
 ```
 ppt_reflex/
-├── builder.py            # Sole AI entry point
+├── builder.py            # Sole entry point — AI writes to this
 ├── style_presets.json    # 6 presets × image_layout (v2)
 ├── image_prompter.py     # AI image prompt generator
 ├── grid/
-│   ├── types.py          # SemanticRole, ContentType, ElementPayload...
-│   ├── plan.py           # LayoutPlan, Region, Phase1Element, DecoIntent
+│   ├── types.py          # 30+ types: SemanticRole, ContentType...
+│   ├── plan.py           # LayoutPlan, Region, ElementPayload
 │   ├── canvas.py         # Three-layer canvas
-│   ├── phase1.py         # Information layer layout
-│   ├── phase2.py         # Decoration layer layout
+│   ├── phase1.py         # Info layer: stack/inline placement
+│   ├── phase2.py         # Decoration: arrow routing
 │   ├── composition.py    # Global whitespace/balance/density
 │   ├── aesthetics.py     # 10+ WCAG rules engine
-│   ├── templates.py      # TemplateProfile + override()
+│   ├── templates.py      # 6 TemplateProfiles + override()
 │   ├── serializer.py     # Grid → python-pptx rendering
 │   ├── text_metrics.py   # Pre-render text size estimation
+│   ├── orchestrator.py   # Diagnostic repair loop
 │   └── tests/            # 46 tests
 └── .claude/skills/ppt-maker/
     └── SKILL.md
@@ -151,11 +207,11 @@ ppt_reflex/
 
 ## Design Philosophy
 
-> **Layout is a constraint-solving problem, not a one-shot rendering problem.**
+> **The engine computes truth and returns options. It never silently mutates the AI's declarations.**
 
-Every phase produces diagnostics, not silent mutations. The engine is the solver; the AI is the decision-maker. They communicate through structured data — no visual inspection required. This is the difference between "generate and pray" and "declare and verify."
+This is not a "generate and pray" system. It's a declarative constraint solver with a text-based diagnostics channel. AI declares what it wants. Engine computes what's possible. Diagnostics flow back as structured data. AI decides. Loop closes. Every LLM — vision or no vision — can participate.
 
-If `build().ok` is `true`, the file is correct. Guaranteed.
+If `build().ok` is `true`, the file is visually correct. Guaranteed. No `.pptx` renderer required.
 
 ---
 
