@@ -6,7 +6,9 @@
 [![Built for DeepSeek](https://img.shields.io/badge/built%20for-DeepSeek-536DFE.svg)](https://platform.deepseek.com/)
 [![LLMs: Claude, GPT, Gemini](https://img.shields.io/badge/LLMs-Claude%20%7C%20GPT%20%7C%20Gemini-8e44ad.svg)]()
 
-**DeepSeek can't see images. Every LLM is blind to its own `.pptx` output — it writes code, crosses its fingers, and hopes. Other tools solve this by making the AI guess harder. ppt_reflex doesn't guess. It runs a real constraint-solving engine, returns structured diagnostics the AI can read and act on, and guarantees visual correctness before the file is written.**
+**DeepSeek can't see images. This gives it the power to create perfect PowerPoints anyway.**
+
+Every LLM is blind to its own `.pptx` output — it writes code, crosses its fingers, and hopes. Other tools solve this by making the AI guess harder. ppt_reflex doesn't guess. It runs a real constraint-solving engine, returns structured diagnostics the AI can read and act on, and guarantees visual correctness before the file is written.
 
 The key insight: it's not a one-way pipeline. It's a **closed loop**. AI declares intent → engine computes layout → engine returns per-element diagnostics → AI reads them, decides what to fix → re-enters the pipeline. The AI doesn't need to see. It needs to read. And every LLM — DeepSeek included — can read structured JSON.
 
