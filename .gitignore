@@ -23,7 +23,6 @@ package/
 *.tgz
 
 # Personal notes
-.cursorrules
 文献检索工作流.md
 
 # Binary artifacts (don't ship test PPTs)
