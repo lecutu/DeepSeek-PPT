@@ -236,6 +236,32 @@ class PPTBuilder:
         ae_diags = self._run_aesthetics(c, plan)
         diags.extend(ae_diags)
 
+        # P0-口②④: freeze → overflow check before render (single-slide path)
+        from ppt_reflex.grid.text_metrics import check_overflow_2d
+        for pe in plan.elements:
+            p = pe.payload
+            if not p or not p.text.strip():
+                continue
+            if pe.content_type not in (ContentType.TEXT, ContentType.TEXTBOX):
+                continue
+            v_auto_fit = not pe.height_is_locked
+            h_auto_fit = not pe.width_is_locked
+            issues = check_overflow_2d(
+                p.text, p.font_size,
+                box_w=pe.w, box_h=pe.h,
+                line_spacing=p.line_spacing,
+                v_auto_fit=v_auto_fit,
+                h_auto_fit=h_auto_fit,
+            )
+            for iss in issues:
+                diags.append({
+                    "slide": slide_idx, "phase": "freeze",
+                    "kind": iss["kind"],
+                    "severity": iss["level"],
+                    "elem_id": pe.elem_id,
+                    "message": iss["message"],
+                })
+
         pv = c.pre_commit_validation()
         for err in pv.get("errors", []):
             diags.append(_diag(slide_idx, "pre", None, kind="validation_error", severity="error",
@@ -335,6 +361,37 @@ class PPTBuilder:
                     "severity": ti.level, "elem_id": ti.elem_id,
                     "message": ti.message,
                 })
+
+            # P0-口②④: freeze → overflow check before render
+            # Phase 1 locked coordinates (height_is_locked=True for stack/inline elements).
+            # Aesthetics resolved final font_size. Freeze snapshots both, then 2D overflow
+            # check reads the frozen state — same data renderer will use.
+            # SHAPE_TO_FIT_TEXT cannot rescue overflow when layout has fixed the box dims.
+            from ppt_reflex.grid.text_metrics import check_overflow_2d
+            for pe in plan.elements:
+                p = pe.payload
+                if not p or not p.text.strip():
+                    continue
+                if pe.content_type not in (ContentType.TEXT, ContentType.TEXTBOX):
+                    continue
+                # v_auto_fit: SHAPE_TO_FIT_TEXT only actually grows if layout didn't lock height
+                v_auto_fit = not pe.height_is_locked
+                h_auto_fit = not pe.width_is_locked
+                issues = check_overflow_2d(
+                    p.text, p.font_size,
+                    box_w=pe.w, box_h=pe.h,
+                    line_spacing=p.line_spacing,
+                    v_auto_fit=v_auto_fit,
+                    h_auto_fit=h_auto_fit,
+                )
+                for iss in issues:
+                    diags.append({
+                        "slide": i, "phase": "freeze",
+                        "kind": iss["kind"],
+                        "severity": iss["level"],
+                        "elem_id": pe.elem_id,
+                        "message": iss["message"],
+                    })
 
             # Fix #9: pre_commit_validation — bounds/overflow/role conflicts
             pv = c.pre_commit_validation()

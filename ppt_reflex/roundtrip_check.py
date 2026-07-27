@@ -7,14 +7,15 @@ python-pptx font metrics differ from engine heuristics; only the saved file tell
 from __future__ import annotations
 from pptx import Presentation
 from pptx.util import Pt
-from .grid.text_metrics import estimate_text_size
+from .grid.text_metrics import estimate_text_size, _line_width
 
 
 def check_overflow(path: str) -> list[dict]:
-    """Reopen a saved PPTX and verify every text shape for overflow.
+    """Reopen a saved PPTX and verify every text shape for overflow — 2D (vertical + horizontal).
 
     Returns a list of overflow diagnostics per shape, sorted by severity:
       - silent_overflow: shape height < estimated height by >4pt → error
+      - overflow_horizontal: longest non-breakable word > box width → error
       - tight_fit: shape height within 2–4pt of estimate → warning
       - ok: everything else
 
@@ -47,17 +48,17 @@ def check_overflow(path: str) -> list[dict]:
                         font_sizes[fs] = font_sizes.get(fs, 0) + 1
             font_size = max(font_sizes, key=font_sizes.get) if font_sizes else 12.0
 
-            # Engine estimate: how tall SHOULD this be?
+            # ── Vertical overflow ──
             _, ov_y, rw, rh = estimate_text_size(
                 text, font_pt=font_size, line_spacing=line_spacing,
                 box_width_pt=actual_w, box_height_pt=9999, word_wrap=True,
             )
 
-            gap = rh - actual_h
-            if gap > 4:
+            gap_v = rh - actual_h
+            if gap_v > 4:
                 severity = "error"
                 kind = "silent_overflow"
-            elif gap > 2:
+            elif gap_v > 2:
                 severity = "warning"
                 kind = "tight_fit"
             else:
@@ -76,13 +77,42 @@ def check_overflow(path: str) -> list[dict]:
                     ),
                     "actual_size": (round(actual_w, 0), round(actual_h, 0)),
                     "estimated_h": round(rh, 0),
-                    "gap_pt": round(gap, 1),
+                    "gap_pt": round(gap_v, 1),
                     "font_size": round(font_size, 1),
                     "auto_size": str(tf.auto_size),
                     "text_preview": text[:80],
                     "message": (
                         f"text needs {rh:.0f}pt, box is {actual_h:.0f}pt — "
-                        f"{gap:.0f}pt hidden below. font={font_size:.0f}pt, auto_size={tf.auto_size}"
+                        f"{gap_v:.0f}pt hidden below. font={font_size:.0f}pt, auto_size={tf.auto_size}"
+                    ),
+                })
+
+            # ── Horizontal overflow: longest unbreakable word vs box width ──
+            longest_word_w = 0.0
+            for line in text.split("\n"):
+                for word in line.split(" "):
+                    ww = _line_width(word, font_size)
+                    if ww > longest_word_w:
+                        longest_word_w = ww
+            if actual_w > 0 and longest_word_w > actual_w + 1:
+                results.append({
+                    "slide": si,
+                    "kind": "overflow_horizontal",
+                    "severity": "error",
+                    "shape_type": str(shape.shape_type),
+                    "position": (
+                        round(shape.left / 12700, 0),
+                        round(shape.top / 12700, 0),
+                    ),
+                    "actual_size": (round(actual_w, 0), round(actual_h, 0)),
+                    "longest_word_w": round(longest_word_w, 1),
+                    "box_w": round(actual_w, 0),
+                    "font_size": round(font_size, 1),
+                    "auto_size": str(tf.auto_size),
+                    "text_preview": text[:80],
+                    "message": (
+                        f"longest word {longest_word_w:.1f}pt > box {actual_w:.0f}pt — "
+                        f"horizontal overflow. font={font_size:.0f}pt"
                     ),
                 })
 

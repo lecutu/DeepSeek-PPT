@@ -97,6 +97,58 @@ def estimate_text_size(text: str, font_pt: float,
     return overflow_x, overflow_y, rendered_w, rendered_h
 
 
+def check_overflow_2d(text: str, font_pt: float, box_w: float, box_h: float,
+                       line_spacing: float = 1.2,
+                       v_auto_fit: bool = False,
+                       h_auto_fit: bool = False) -> list[dict]:
+    """P0-口③: 二维溢出检测。vertical + horizontal，每个维度独立判定是否豁免。
+
+    Returns list of overflow issues — empty means no overflow detected.
+    垂直：文字渲染高度 > 框高 → overflow_vertical
+    水平：最长不可断词 > 框宽 → overflow_horizontal（会顶破或强制多换行）
+    """
+    if not text.strip():
+        return []
+
+    issues: list[dict] = []
+    m = estimate_text_size(text, font_pt, line_spacing, box_w, box_h, word_wrap=True)
+    _, ov_y, rendered_w, rendered_h = m
+
+    # ═══ 垂直 ═══
+    if not v_auto_fit and rendered_h > box_h + 2:
+        issues.append({
+            "kind": "overflow_vertical",
+            "level": "error",
+            "rendered_h": round(rendered_h, 1),
+            "box_h": round(box_h, 1),
+            "font_size": font_pt,
+            "message": (f"text height {rendered_h:.1f}pt > box {box_h:.1f}pt — "
+                        f"vertical overflow, box is locked"),
+        })
+
+    # ═══ 水平 ═══
+    if not h_auto_fit:
+        # 找最长不可断词（line split on space, max word width）
+        longest_word_w = 0.0
+        for line in text.split("\n"):
+            for word in line.split(" "):
+                ww = _line_width(word, font_pt)
+                if ww > longest_word_w:
+                    longest_word_w = ww
+        if box_w > 0 and longest_word_w > box_w + 1:
+            issues.append({
+                "kind": "overflow_horizontal",
+                "level": "error",
+                "longest_word_w": round(longest_word_w, 1),
+                "box_w": round(box_w, 1),
+                "font_size": font_pt,
+                "message": (f"longest word {longest_word_w:.1f}pt > box {box_w:.1f}pt — "
+                            f"word breaks through right edge"),
+            })
+
+    return issues
+
+
 def expand_bbox(x: float, y: float, w: float, h: float,
                 overflow_x: float, overflow_y: float,
                 text_align: str = "left") -> tuple[float, float, float, float]:

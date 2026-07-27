@@ -133,6 +133,10 @@ class PageElement:
     allow_overlap: bool = False
     allow_wrap: bool = False
     z_order: int = 100
+    # P0-口①: layout lock flags — when True, SHAPE_TO_FIT_TEXT does NOT excuse overflow
+    # because the layout system has fixed this dimension (stack/inline allocation).
+    height_is_locked: bool = False
+    width_is_locked: bool = False
 
     @property
     def rect(self) -> tuple[float, float, float, float]:

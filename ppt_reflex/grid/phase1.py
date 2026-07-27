@@ -43,7 +43,8 @@ def _estimate_height(elem, ew: float) -> float:
     return text_h
 
 
-def _commit_element(elem, ex, ey, ew, eh, plan, canvas, locked, region):
+def _commit_element(elem, ex, ey, ew, eh, plan, canvas, locked, region,
+                    height_is_locked=False, width_is_locked=False):
     pe = PageElement(
         elem_id=elem.elem_id, region_id=getattr(elem, "region_id", region.region_id),
         content_type=getattr(elem, "content_type", ContentType.UNKNOWN),
@@ -51,6 +52,8 @@ def _commit_element(elem, ex, ey, ew, eh, plan, canvas, locked, region):
         x=ex, y=ey, w=ew, h=eh,
         allow_wrap=getattr(elem, "allow_wrap", False),
         z_order=100,
+        height_is_locked=height_is_locked,
+        width_is_locked=width_is_locked,
     )
     locked.append(pe)
     plan.elements.append(pe)
@@ -112,7 +115,8 @@ def _place_stack(elems, ux, uy, uw, uh, page_w, page_h,
                     "split content to next slide",
                 ],
             ))
-        _commit_element(elem, ex, ey, ew, h, plan, canvas, locked, region)
+        _commit_element(elem, ex, ey, ew, h, plan, canvas, locked, region,
+                        height_is_locked=True, width_is_locked=True)
         cy = ey + h + elem.margin_above
 
 

@@ -26,7 +26,7 @@ from .serializer import classify_shape, ppt_to_grid, grid_to_ppt
 from .supply import Supply
 from .spatial import SpatialIndex
 from .profiles import infer_profile
-from .text_metrics import estimate_text_size, expand_bbox, OverflowReport
+from .text_metrics import estimate_text_size, expand_bbox, OverflowReport, check_overflow_2d
 from .aesthetics import AestheticsEngine, AestheticViolation, ElemStyle
 from .templates import TEMPLATES, TemplateProfile, get_template, AGENT_PROMPT
 from .plan import LayoutPlan, Region, Phase1Element, DecoIntent, DecorationSpec, PageElement, LayoutDiagnostic, FeedbackBundle
