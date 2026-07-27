@@ -31,6 +31,10 @@ package/
 
 # Generated output
 ppt_reflex/renders/
+demo_imgs/
+
+# Temp diagnostic scripts (local dev only)
+_*.py
 
 # C# service (separate project)
 ppt_reflex/PPTReflexService/

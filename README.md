@@ -76,7 +76,7 @@ Each failure requires a **human** to look at the file, spot the bug, and describ
 | **Aspect ratio preserved** | PIL reads natural dimensions → `scale = min(w/natW, h/natH)` → invariant: `|final ratio − original| ≤ 0.001`. Violation = FATAL. |
 | **No invisible text** | WCAG AA contrast ratio ≥ 4.5:1. Dark fill → auto white text. `invisible_text` = BLOCK. |
 | **Box grows with content** | `_estimate_height()` computes text demand before allocating height. `max(preferred, text_needed)`. Shapes auto-grow. |
-| **Overflow detected, not hidden** | `text_metrics` pre-estimates rendered dimensions of every string. Reports `overflow_v` / `overflow_h` with fix options. |
+| **Overflow detected BEFORE render** | `check_overflow_2d()` pre-estimates vertical + horizontal dimensions. Respects `height_is_locked`/`width_is_locked` flags. Freeze step runs after Aesthetics, before `_render_slide()`. |
 | **Design consistency** | 6 presets lock color, font, shape, image treatment. Pick once, enforced everywhere. |
 | **Structured diagnostics** | Every build returns `{ok, diagnostics: [{phase, kind, severity, elem_id, fix_options}]}`. Machine-readable. AI-actionable. |
 
@@ -123,23 +123,32 @@ PPTBuilder.add_slide()  ──  AI declares regions + elements + arrow intents
 └───────────────────────────────────────────────────┘
         │
         ▼
-┌───────────────────────────────────────────────────┐
-│             FIVE-PHASE PIPELINE                    │
-│  Phase 0   — intent → LayoutPlan                  │
-│  Phase 0.5 — region validation                    │
-│  Phase 1   — info layer: stack/inline placement    │
-│  Phase 2   — decoration: arrow routing            │
-│  Phase 2.5 — global composition: whitespace/density│
-│       │                                            │
-│  AestheticsEngine (10+ WCAG rules)                │
-│  Pre-commit validation                            │
-│       │                                            │
-│       ▼                                            │
-│  Structured diagnostics → AI reads, decides, loops │
-│       │                                            │
-│       ▼                                            │
-│  _render_slide() → .pptx                          │
-└───────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│                SIX-PHASE PIPELINE                     │
+│  Phase 0   — intent → LayoutPlan                     │
+│  Phase 0.5 — region validation                       │
+│  Phase 1   — info layer: stack/inline placement       │
+│              (sets height_is_locked/width_is_locked)  │
+│  Phase 2   — decoration: arrow routing               │
+│  Phase 2.5 — global composition: whitespace/density   │
+│       │                                               │
+│  AestheticsEngine (10+ WCAG rules + style resolution) │
+│  Color Triangle — bg↔text↔fill 3-way contrast check  │
+│  ❄ Freeze + check_overflow_2d — 2D overflow detect   │
+│       │  (vertical: rendered_h > box_h)               │
+│       │  (horizontal: longest word > box_w)           │
+│       │  (respects height_is_locked/width_is_locked)  │
+│  Pre-commit validation                                │
+│       │                                               │
+│       ▼                                               │
+│  _render_slide() → .pptx                              │
+│       │                                               │
+│       ▼                                               │
+│  Roundtrip check — reopen .pptx, verify every box     │
+│       │                                               │
+│       ▼                                               │
+│  Structured diagnostics → AI reads, decides, loops    │
+└──────────────────────────────────────────────────────┘
 ```
 
 ## The Loop in Action
@@ -256,9 +265,14 @@ ppt_reflex/
 ├── builder.py            # Sole entry point — AI writes to this
 ├── style_presets.json    # 6 presets × image_layout (v2)
 ├── image_prompter.py     # AI image prompt generator
+├── roundtrip_check.py    # Reopen PPTX, verify text fits (2D overflow)
+├── color_triangulator.py # bg↔text↔fill 3-way contrast triangle
+├── diff_log.py           # Snapshot-based mutation trace (incremental build)
+├── deck_plan.py          # Full-deck layout orchestration
+├── deck_planner.py       # Deck-level content allocation
 ├── grid/
 │   ├── types.py          # 30+ types: SemanticRole, ContentType...
-│   ├── plan.py           # LayoutPlan, Region, ElementPayload
+│   ├── plan.py           # LayoutPlan, Region, PageElement (lock flags)
 │   ├── canvas.py         # Three-layer canvas
 │   ├── phase1.py         # Info layer: stack/inline placement
 │   ├── phase2.py         # Decoration: arrow routing
@@ -266,11 +280,16 @@ ppt_reflex/
 │   ├── aesthetics.py     # 10+ WCAG rules engine
 │   ├── templates.py      # 6 TemplateProfiles + override()
 │   ├── serializer.py     # Grid → python-pptx rendering
-│   ├── text_metrics.py   # Pre-render text size estimation
+│   ├── text_metrics.py   # Pre-render text estimation + check_overflow_2d()
 │   ├── orchestrator.py   # Diagnostic repair loop
 │   └── tests/            # 46 tests
-└── .claude/skills/ppt-maker/
-    └── SKILL.md
+├── gen_cs_wtf.py         # 14-slide CS quirks deck (demo)
+├── gen_crash_log.py      # 12-slide programmer pain deck (demo)
+├── gen_demo_ppt.py       # General demo generator
+├── .claude/skills/ppt-maker/
+│   └── SKILL.md
+└── .claude/
+    └── CLAUDE.md
 ```
 
 ## Design Philosophy
