@@ -254,10 +254,11 @@ class PPTBuilder:
                 h_auto_fit=h_auto_fit,
             )
             for iss in issues:
+                severity = "warning" if pe.content_type == ContentType.TEXTBOX else iss["level"]
                 diags.append({
                     "slide": slide_idx, "phase": "freeze",
                     "kind": iss["kind"],
-                    "severity": iss["level"],
+                    "severity": severity,
                     "elem_id": pe.elem_id,
                     "message": iss["message"],
                 })
@@ -282,6 +283,75 @@ class PPTBuilder:
         return {"ok": len(errs) == 0, "diagnostics": diags,
                 "summary": f"slide {slide_idx}: {len(diags)} issues ({len(errs)} errors, {len(warns)} warnings)",
                 "roundtrip_ok": True}  # single-slide mode defers roundtrip to deck-level build()
+
+    def build_stream(self, path: str|None = None):
+        """分页流式构建 — 逐页 yield 诊断，AI 可以立即看到每页结果。
+
+        用法：
+            for slide_result in b.build_stream("out.pptx"):
+                ok = slide_result["ok"]
+                errs = [d for d in slide_result["diagnostics"] if d["severity"] == "error"]
+                print(f"S{slide_result['slide']:02d}: {len(errs)} errors")
+                if errs:
+                    break  # 中断构建，只修这一页
+
+        与 build() 的区别：
+        - build() 一次性完成所有页 + roundtrip，返回 dict
+        - build_stream() 逐页 yield，不阻塞等待全部完成
+        - 第一个返回的是 {'type': 'start', ...} 元信息
+        - 之后每个是 {'type': 'slide', ...} 单页诊断
+        - 最后是 {'type': 'summary', ...} 总汇 (含 roundtrip)
+        """
+        from pptx import Presentation; from pptx.util import Pt
+        if path is None:
+            ts = int(time.time()); path = os.path.join(tempfile.gettempdir(), f"ppt_reflex_{ts}.pptx")
+
+        if self._template_pptx and os.path.exists(self._template_pptx):
+            prs = Presentation(self._template_pptx)
+            while len(prs.slides) > 0:
+                rId = prs.slides._sldIdLst[0].get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id')
+                prs.part.drop_rel(rId)
+                prs.slides._sldIdLst.remove(prs.slides._sldIdLst[0])
+        else:
+            prs = Presentation()
+        prs.slide_width = Pt(self.pw); prs.slide_height = Pt(self.ph)
+        total_slides = len(self._slides)
+
+        yield {"type": "start", "total_slides": total_slides, "template": self._t.id, "style": self._style_id}
+
+        all_diags: list[dict] = []
+        for i, spec in enumerate(self._slides):
+            slide_result = self.build_single_slide(i, prs=prs)
+            all_diags.extend(slide_result.get("diagnostics", []))
+            yield {**slide_result, "type": "slide", "slide": i, "slide_total": total_slides}
+
+        prs.save(path)
+        errs = [d for d in all_diags if d.get("severity") in ("error",)]
+        warns = [d for d in all_diags if d.get("severity") in ("warning","warn")]
+
+        rt_results = check_overflow(path)
+        for rt in rt_results:
+            all_diags.append(_diag(rt["slide"], "rt", None,
+                                   kind=rt["kind"], severity=rt["severity"],
+                                   message=rt["message"]))
+        rt_errors = [rt for rt in rt_results if rt["severity"] == "error"]
+        rt_warns = [rt for rt in rt_results if rt["severity"] == "warning"]
+
+        diff_report = self.diff_log.diff()
+        scope = self.diff_log.scope_alert()
+        yield {
+            "type": "summary",
+            "path": path, "ok": len(errs) == 0 and len(rt_errors) == 0,
+            "diagnostics": all_diags,
+            "summary": f"{len(all_diags)} issues ({len(errs)} errors, {len(warns)} warnings, "
+                       f"{len(rt_errors)} roundtrip errors, {len(rt_warns)} roundtrip warnings)",
+            "template": self._t.id, "style": self._style_id,
+            "diff": {
+                "entries": len(diff_report.entries) if diff_report else 0,
+                "changed_elem_ids": list(diff_report.changed_elem_ids) if diff_report else [],
+            },
+            "scope_alert": scope,
+        }
 
     def build(self, path: str|None = None) -> dict:
         from pptx import Presentation; from pptx.util import Pt
@@ -385,10 +455,11 @@ class PPTBuilder:
                     h_auto_fit=h_auto_fit,
                 )
                 for iss in issues:
+                    severity = "warning" if pe.content_type == ContentType.TEXTBOX else iss["level"]
                     diags.append({
                         "slide": i, "phase": "freeze",
                         "kind": iss["kind"],
-                        "severity": iss["level"],
+                        "severity": severity,
                         "elem_id": pe.elem_id,
                         "message": iss["message"],
                     })

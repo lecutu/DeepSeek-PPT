@@ -169,6 +169,19 @@ Or auto-infer: `b.auto_layout_mode("img.jpg")` — picks from aspect ratio:
 ### Build + diagnostics
 
 ```python
+# 新推荐：分页流式 (逐页 yield，AI 边跑边看)
+for slide_result in b.build_stream("output.pptx"):
+    if slide_result["type"] == "start":
+        print(f"Building {slide_result['total_slides']} slides...")
+    elif slide_result["type"] == "slide":
+        errs = [d for d in slide_result["diagnostics"] if d["severity"] == "error"]
+        if errs:
+            print(f"S{slide_result['slide']:02d}: {len(errs)} errors — STOP HERE, fix this page")
+            break
+    elif slide_result["type"] == "summary":
+        print(slide_result["summary"])
+
+# 传统模式：一次性完成 (含 roundtrip)
 r = b.build("output.pptx")
 # Returns: {"ok": bool, "summary": str, "diagnostics": list, "path": str}
 
@@ -177,6 +190,25 @@ for d in r["diagnostics"]:
         print(f"S{d['slide']:02d} [{d['phase']}] {d['kind']}: {d['message']}")
         # d keys: slide, phase, kind, severity, elem_id, message
 ```
+
+### Diagnosis classification — what to FIX vs IGNORE
+
+| severity | phase | kind | action |
+|:--|:--|:--|:--|
+| `error` | `0.5` / `1` / `pre` | any | 🔧 MUST fix |
+| `error` | `freeze` | `overflow_*` on TEXT | 🔧 fix (real overflow) |
+| `error` | `3.0` | `tri_*` | 🔧 fix (contrast violation) |
+| **`warning`** | **`freeze`** | **`overflow_*` on b.box()** | **🚫 IGNORE — PPTX auto-expands boxes** |
+| `warning` | any | any | 🚫 IGNORE |
+| `info` | any | any | 🚫 IGNORE |
+
+**Rule: file exists AND >100KB → DONE. Don't read diagnostics beyond error count.**
+
+### Token explosion prevention — 3 iron rules
+
+1. **Diagnosis ≠ crash.** `b.box()` overflow is WARNING not error. PPTX auto-expands. Only `severity: "error"` matters.
+2. **Batch fix, don't loop.** grep all same-issue → bulk edit → ONE run. Never: fix → run → fix → run.
+3. **Read fragments, not full file.** `Read(file, offset=N, limit=30)` for the broken slide only. Only re-read full file when rewriting.
 
 ### Open generated file
 

@@ -191,6 +191,19 @@ Or auto-infer: `b.auto_layout_mode("img.jpg")` — picks mode from aspect ratio:
 ### Build + read diagnostics
 
 ```python
+# 推荐：分页流式 — 逐页 yield，AI 边跑边看，一页报错就停
+for slide_result in b.build_stream("output.pptx"):
+    if slide_result["type"] == "start":
+        print(f"Building {slide_result['total_slides']} slides...")
+    elif slide_result["type"] == "slide":
+        errs = [d for d in slide_result["diagnostics"] if d["severity"] == "error"]
+        if errs:
+            print(f"S{slide_result['slide']:02d}: {len(errs)} errors — STOP, fix this page only")
+            break
+    elif slide_result["type"] == "summary":
+        print(slide_result["summary"])
+
+# 传统一次性模式
 r = b.build("output.pptx")
 # Returns: {"ok": bool, "summary": str, "diagnostics": list, "path": str}
 
@@ -199,6 +212,25 @@ for d in r["diagnostics"]:
         # d keys: slide, phase, kind, severity, elem_id, message
         print(f"S{d['slide']:02d} [{d['phase']}] {d['kind']}: {d['message']}")
 ```
+
+### Diagnosis triage — FIX vs IGNORE
+
+| severity + phase | meaning | action |
+|:--|:--|:--|
+| `error` + `0.5/1/pre` | Real layout/validation error | 🔧 FIX |
+| `error` + `freeze` + TEXT | Text overflow in fixed box | 🔧 FIX |
+| `error` + `3.0 tri_*` | Contrast/invisible text | 🔧 FIX |
+| **`warning` + `freeze` + b.box()** | **Box overflow — PPTX auto-expands** | **🚫 IGNORE** |
+| `warning` (any phase) | Margin, spacing, L* | 🚫 IGNORE |
+| `info` (any phase) | Advisory | 🚫 IGNORE |
+
+**Golden rule: file >100KB on disk → it's fine. Don't read diagnostics beyond `[d for d in r["diagnostics"] if d["severity"]=="error"]`.**
+
+### Token explosion prevention — 3 IRON RULES
+
+1. **Diagnosis ≠ crash.** `b.box()` overflow = warning. PPTX auto-expands boxes. Only `severity: "error"` counts.
+2. **Batch fix.** grep all same-error → one bulk edit → ONE run. Never: fix → run → fix → run.
+3. **Read fragments.** `Read(file, offset=N, limit=30)` for the broken slide only. Full file only when rewriting.
 
 ### Open generated file
 
