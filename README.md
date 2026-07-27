@@ -170,16 +170,66 @@ for d in result["diagnostics"]:
 | **Qwen / Llama / Mistral** | Varies | ✅ Works | Any model that writes Python and reads JSON. |
 | **Ollama / local models** | Usually no | ✅ Works | Designed for this. The loop works entirely through text. |
 
-## Style Presets
+## Template Intelligence — Semantic Contract, Not Just Colors
 
-| Preset | Mood | Image Mode | Image Ratio | Corners |
+A template preset is a **nine-dimension design contract**. When the AI picks `academic_rigorous`, everything locks in — colours, fonts, shapes, image treatment, caption format, density limits, and an explicit philosophy statement the AI reads before generating. The engine doesn't silently guess. The preset says what's allowed and what's forbidden, in plain language.
+
+| Layer | What it controls | `academic_rigorous` example |
+|:--|:--|:--|
+| **Colors** (8 tokens) | bg, surface, text-primary, text-secondary, accent, accent-soft, on-accent, warn | `#FBFAF7` cream bg, `#7A3B2E` brick accent |
+| **Fonts** (3 scales) | title, body, caption — per preset | 28pt bold title, 14pt body, 11pt caption |
+| **Shapes** | corner radius (card/pill/chip), shadow, border | 4pt corners, no shadow, 1pt border |
+| **Image philosophy** | *what* the image IS in this style | "Figure — must be numbered, captioned, cited in body text" |
+| **Image modes** (3–4) | per-mode w/h anchor ratio constraints | center_float ≤560pt×360pt, hero_top ≤800pt×280pt |
+| **Image treatment** | corner radius, border role, shadow role | 0pt corners, strong border, no shadow |
+| **Caption format** | font size, alignment, lines, prefix | 11pt left, 2 lines, `Figure N. ` prefix |
+| **Density** | max elements, max chars, dark bg allowed | 12 elements, 250 chars, dark bg = false |
+| **Guidelines** | natural-language rules, enforced by AestheticsEngine | "低饱和配色，模拟印刷品质感。禁止圆角卡片/阴影/渐变" |
+
+### The AI reads this before it generates
+
+Each preset carries an **image philosophy** and **layout rules** the engine feeds back:
+
+```
+academic_rigorous: "低饱和配色。禁止圆角大卡片、阴影、渐变。"
+tech_dark:        "暗场只点 1–2 处霓虹。禁止白字落亮霓虹填充块。"
+editorial_magazine: "超大标题 + 不对称网格 + 硬边构图。每页一个强视觉锚点。"
+creative_vibrant: "大圆角 + 重字重 + 贴纸硬阴影。单页 ≤2 彩色。"
+corporate_minimal: "一页一个强调色落点，其余全灰阶。禁止渐变、发光。"
+government_solemn: "标题居中、对称构图。顶部/底部细红线点缀。禁止霓虹。"
+```
+
+These aren't hints. They're enforced by the engine at three points (`try_place` → `commit` → `audit`). Violations come back as diagnostics. The engine never silently corrects — it reports, and the AI decides.
+
+### Selection guide (built in)
+
+```python
+# "What preset fits a thesis defense?"
+presets["selection_guide"]["by_occasion"]["paper_defense_seminar"]  # → "academic_rigorous"
+
+# "What fits an executive pitch?"
+presets["selection_guide"]["by_audience"]["executive_client"]  # → ["corporate_minimal", "government_solemn"]
+```
+
+### Query the preset mid-generation
+
+```python
+b.auto_layout_mode("fig1.png")    # → "center_float" (aspect 0.8–1.6)
+b.image_constraints("hero_top")   # → {"max_width_pt": 800, "max_height_pt": 280, ...}
+b.image_treatment()               # → {"corner_radius_pt": 0, "border_role": "border_strong", ...}
+b.caption_format()                # → {"prefix": "Figure N. ", "alignment": "left", ...}
+```
+
+## Six Presets at a Glance
+
+| Preset | Mood | Theme | Image Role | Dominant Trait |
 |:--|:--|:--|:--|:--|
-| `academic_rigorous` | Rigorous, restrained | center_float | ≤60% | 0 |
-| `corporate_minimal` | Clean, trustworthy | hero_right | ≤40% | 8pt |
-| `tech_dark` | Immersive, dramatic | hero_right | ≤50% | 12pt |
-| `magazine_editorial` | Bold, narrative | hero_top | 50–70% | 0 |
-| `creative_vibrant` | Playful, friendly | center_float | ≤50% | 20pt |
-| `government_solemn` | Authoritative, formal | hero_top | ≤45% | 4pt |
+| `academic_rigorous` | Rigorous, restrained | light | Numbered figure with caption | Print-quality, low saturation |
+| `corporate_minimal` | Clean, trustworthy | light | Visual evidence | One accent, everything else grayscale |
+| `tech_dark` | Immersive, dramatic | dark | Illuminated window in void | 1–2 neon points, dark depth |
+| `editorial_magazine` | Bold, narrative | light | Main character (占最大面积) | Oversized titles, asymmetric grid |
+| `creative_vibrant` | Playful, friendly | light | Sticker with shadow | Big round corners, 贴纸 aesthetic |
+| `government_solemn` | Authoritative, formal | light | Documentary proof | Symmetric, ribbon/line accents |
 
 ## Install
 
