@@ -247,7 +247,7 @@ b.caption_format()                # → {"prefix": "Figure N. ", "alignment": "l
 | `creative_vibrant` | Playful, friendly | light | Sticker with shadow | Big round corners, 贴纸 aesthetic |
 | `government_solemn` | Authoritative, formal | light | Documentary proof | Symmetric, ribbon/line accents |
 
-> **💡 模板还不够丰富？自己改就行。** 当前 6 套模板 + 6 套风格偏向学术/商务场景，风格较单一。模块设计就是让你改的——`ppt_reflex/grid/templates.py` 里每个 `TemplateProfile` 都是数据类，改颜色/字体/间距不需要碰引擎代码。`style_presets.json` 同理，纯 JSON 配置，打开就懂。PR welcome。
+> **Templates are semantic contracts, not locked designs.** The 6 presets define *what* the deck should feel like — color mood, image role, density limits — not pixel-level layouts. They're intentionally narrow: academic/business contexts is where blind LLM generation has the hardest time going off-script. The modular design means you can add your own semantic preset without touching engine code. `ppt_reflex/grid/templates.py` — every `TemplateProfile` is a plain dataclass (colors, fonts, spacing, philosophy string). `style_presets.json` — same fields as JSON for config-driven overrides. PRs welcome.
 
 ## Install
 
