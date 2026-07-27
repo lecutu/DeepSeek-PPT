@@ -247,6 +247,8 @@ b.caption_format()                # → {"prefix": "Figure N. ", "alignment": "l
 | `creative_vibrant` | Playful, friendly | light | Sticker with shadow | Big round corners, 贴纸 aesthetic |
 | `government_solemn` | Authoritative, formal | light | Documentary proof | Symmetric, ribbon/line accents |
 
+> **💡 模板还不够丰富？自己改就行。** 当前 6 套模板 + 6 套风格偏向学术/商务场景，风格较单一。模块设计就是让你改的——`ppt_reflex/grid/templates.py` 里每个 `TemplateProfile` 都是数据类，改颜色/字体/间距不需要碰引擎代码。`style_presets.json` 同理，纯 JSON 配置，打开就懂。PR welcome。
+
 ## Install
 
 ```bash
