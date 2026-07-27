@@ -276,6 +276,32 @@ print(r["summary"])
 # Expect: 0 errors
 ```
 
+## COMPLETENESS GATE — self-check BEFORE build()
+
+**Before calling `b.build("output.pptx")`, answer these 5 questions. If any answer is NO, go back and add content. Do NOT skip this.**
+
+```
+1. Slides count ≥ what the user asked for?          [ ]
+2. Every slide has ≥ 3 elements (not counting header)? [ ]
+3. At least 1 b.shape() used (not just text)?        [ ]
+4. At least 1 b.box() with fill_color used?          [ ]
+5. Arrows used if there's a flow/diagram to show?    [ ]
+```
+
+**If ≥3 questions are NO → you're cheating. Add content, then re-check.**
+
+Also verify mechanically:
+```python
+# Before build(), run this self-test:
+n_slides = len(b._slides)
+n_elements = sum(len(s.elements) for s in b._slides)
+n_shapes = sum(1 for s in b._slides for e in s.elements if e.ctype == "shape")
+n_boxes = sum(1 for s in b._slides for e in s.elements if e.ctype == "textbox")
+print(f"Slides: {n_slides}, Elements: {n_elements}, Shapes: {n_shapes}, Boxes: {n_boxes}")
+# If n_elements < n_slides * 3 → TOO SPARSE, go back
+# If n_shapes == 0 → NO VISUAL, go back
+```
+
 ## DON'T
 
 1. **Do NOT read ppt_reflex/ source code.** All APIs are here.
