@@ -1,8 +1,8 @@
 """
-grid/templates.py — PPT 模板配色/字体快照
+grid/templates.py — PPT template color/font snapshot
 
-6 套配色方案, 全白/暖白底, ≤4 色, 对比度 ≥ 4.5:1 (WCAG AA)
-Agent 选择模板 → engine 验证 → 生成时自动应用
+6 color schemes, all white/warm-white backgrounds, <=4 colors, contrast >= 4.5:1 (WCAG AA)
+Agent selects template -> engine validates -> auto-applies on generation
 """
 
 from __future__ import annotations
@@ -12,18 +12,18 @@ from dataclasses import dataclass, field
 class TemplateProfile:
     id: str
     name: str
-    description: str              # 一行描述，Agent 选模板时的依据
+    description: str              # one-line description, Agent's basis for template selection
 
-    # ── 颜色 ──
-    bg_hex: str                   # 背景色
-    text_hex: str                 # 正文色
-    title_hex: str                # 标题色
-    accent_hex: str               # 主强调色
-    accent2_hex: str = ""         # 辅强调色
-    gray_hex: str = "7A8090"      # 次要文字/线条
-    dim_hex: str = "B0B5C0"       # 最淡文字
+    # ── Colors ──
+    bg_hex: str                   # background
+    text_hex: str                 # body text
+    title_hex: str                # title
+    accent_hex: str               # primary accent
+    accent2_hex: str = ""         # secondary accent
+    gray_hex: str = "7A8090"      # secondary text/lines
+    dim_hex: str = "B0B5C0"       # faintest text
 
-    # ── 字体 ──
+    # ── Fonts ──
     title_font: str = "Microsoft YaHei"
     body_font: str = "Microsoft YaHei"
     title_size: int = 28          # pt
@@ -31,21 +31,21 @@ class TemplateProfile:
     caption_size: int = 14        # pt
     page_number_size: int = 12
 
-    # ── 间距 ──
-    page_margin: int = 48         # pt 四边安全区
-    line_spacing: float = 1.35    # 中文推荐 1.35~1.5
+    # ── Spacing ──
+    page_margin: int = 48         # pt four-side safe zone
+    line_spacing: float = 1.35
 
-    # ── 装饰 ──
-    divider_color_hex: str = ""   # 分割线颜色，默认=accent
+    # ── Decor ──
+    divider_color_hex: str = ""   # divider color, default=accent
     divider_width_pt: float = 3.0
-    card_rounding: float = 0      # 卡片圆角, 0=直角
+    card_rounding: float = 0      # card corner radius, 0=sharp
 
-    # ── 约束 ──
-    max_colors: int = 4           # 全篇颜色数上限
+    # ── Constraints ──
+    max_colors: int = 4           # max colors per deck
     max_elements_per_slide: int = 12
     max_chars_per_slide: int = 200
-    allow_dark_bg: bool = False   # 是否允许深色底
-    center_titles: bool = False   # 标题是否居中
+    allow_dark_bg: bool = False   # allow dark backgrounds
+    center_titles: bool = False   # center titles
 
     def to_dict(self):
         return {
@@ -57,7 +57,7 @@ class TemplateProfile:
         }
 
     def override(self, **kwargs) -> "TemplateProfile":
-        """返回新实例, 覆盖指定字段. 用法: t.override(bg_hex="FAFAFA", accent_hex="E74C3C")"""
+        """Return new instance with specified fields overridden. Usage: t.override(bg_hex="FAFAFA", accent_hex="E74C3C")"""
         d = {f.name: getattr(self, f.name) for f in self.__dataclass_fields__.values()}
         d.update(kwargs)
         for k in kwargs:
@@ -67,13 +67,13 @@ class TemplateProfile:
 
 
 # ═══════════════════════════════════════════════════════════
-# 6 套模板
+# 6 templates
 # ═══════════════════════════════════════════════════════════
 
 TEMPLATES = {
     "academic": TemplateProfile(
-        id="academic", name="学术汇报",
-        description="克制、可信、信息密度高。深蓝+砖红强调，白底，宋体正文",
+        id="academic", name="Academic",
+        description="Restrained, trustworthy, high information density. Deep navy + brick red accent, white bg",
         bg_hex="FFFFFF", text_hex="2D2D2D", title_hex="1B3A5C",
         accent_hex="1B3A5C", accent2_hex="C0392B", gray_hex="7A8599", dim_hex="A0A8B8",
         title_font="Microsoft YaHei", body_font="Microsoft YaHei",
@@ -82,8 +82,8 @@ TEMPLATES = {
         max_chars_per_slide=250, center_titles=False,
     ),
     "business": TemplateProfile(
-        id="business", name="商务汇报",
-        description="专业、清晰、结论先行。企业蓝+橙色警示，白底，雅黑",
+        id="business", name="Business",
+        description="Professional, clear, conclusion-first. Corporate blue + orange alert, white bg",
         bg_hex="FFFFFF", text_hex="333333", title_hex="0052D9",
         accent_hex="0052D9", accent2_hex="ED7B2F", gray_hex="888888", dim_hex="BDBDBD",
         title_font="Microsoft YaHei", body_font="Microsoft YaHei",
@@ -92,8 +92,8 @@ TEMPLATES = {
         max_chars_per_slide=180, center_titles=False,
     ),
     "minimal": TemplateProfile(
-        id="minimal", name="极简演讲",
-        description="呼吸感、一屏一意。深灰+单一亮色，白底，极少先",
+        id="minimal", name="Minimal",
+        description="Breathing room, one message per slide. Dark gray + single bright accent, white bg",
         bg_hex="FFFFFF", text_hex="2A2A2F", title_hex="1A1A2E",
         accent_hex="2D5BD7", accent2_hex="FF4757", gray_hex="A0A0B0", dim_hex="D0D0D8",
         title_font="Microsoft YaHei", body_font="Microsoft YaHei",
@@ -102,8 +102,8 @@ TEMPLATES = {
         max_elements_per_slide=6, max_chars_per_slide=100, center_titles=True,
     ),
     "data_report": TemplateProfile(
-        id="data_report", name="数据报告",
-        description="精确、网格感。深灰蓝+数据色板，白底，DIN数字",
+        id="data_report", name="Data Report",
+        description="Precise, grid-feel. Dark slate + data palette, white bg",
         bg_hex="FFFFFF", text_hex="212121", title_hex="37474F",
         accent_hex="1976D2", accent2_hex="F57C00", gray_hex="757575", dim_hex="BDBDBD",
         title_font="Microsoft YaHei", body_font="Microsoft YaHei",
@@ -112,8 +112,8 @@ TEMPLATES = {
         max_elements_per_slide=16, max_chars_per_slide=300, center_titles=False,
     ),
     "teaching": TemplateProfile(
-        id="teaching", name="教学课件",
-        description="友好、层次分明。活力蓝+橙色标记，暖白底",
+        id="teaching", name="Teaching",
+        description="Friendly, well-structured. Vibrant blue + orange markers, warm white bg",
         bg_hex="FFFDF5", text_hex="333333", title_hex="2196F3",
         accent_hex="2196F3", accent2_hex="FF9800", gray_hex="888888", dim_hex="C0C0C0",
         title_font="Microsoft YaHei", body_font="Microsoft YaHei",
@@ -122,8 +122,8 @@ TEMPLATES = {
         max_elements_per_slide=8, max_chars_per_slide=180, center_titles=False,
     ),
     "product": TemplateProfile(
-        id="product", name="产品发布",
-        description="高级感、视觉冲击。深灰底+白字，深底允许，全居中",
+        id="product", name="Product Launch",
+        description="Premium, visual impact. Dark gray bg + white text, dark bg allowed, all centered",
         bg_hex="1D1D1F", text_hex="E8E8EC", title_hex="FFFFFF",
         accent_hex="6366F1", accent2_hex="8B5CF6", gray_hex="98989E", dim_hex="68686E",
         title_font="Microsoft YaHei", body_font="Microsoft YaHei",
@@ -142,25 +142,25 @@ def get_template(template_id: str) -> TemplateProfile:
 
 
 AGENT_PROMPT = """
-# PPT 模板选择提示
+# PPT Template Selection Guide
 
-你正在生成 PPT。请从以下 6 套模板中选择一个，并在 PPT 的第一页使用对应的配色/字体/间距。
+You are generating a PowerPoint deck. Choose one of the 6 templates below and apply the corresponding colors/fonts/spacing on the first slide.
 
-| 模板 ID | 名称 | 适用场景 | 背景 | 主色 | 正文色 |
-|---------|------|---------|------|------|--------|
-| academic | 学术汇报 | 文献汇报/开题/答辩 | #FFFFFF | #1B3A5C 深蓝 | #2D2D2D |
-| business | 商务汇报 | 工作总结/年终汇报 | #FFFFFF | #0052D9 企业蓝 | #333333 |
-| minimal  | 极简演讲 | 分享会/TED | #FFFFFF | #2D5BD7 蓝 | #2A2A2F |
-| data_report | 数据报告 | 年报/分析 | #FFFFFF | #1976D2 蓝 | #212121 |
-| teaching | 教学课件 | 培训/课程 | #FFFDF5 暖白 | #2196F3 蓝 | #333333 |
-| product  | 产品发布 | 品牌宣传 | #1D1D1F 深灰 | #6366F1 紫 | #E8E8EC |
+| ID | Name | Best for | Background | Primary | Body Text |
+|----|------|----------|------------|---------|-----------|
+| academic | Academic | Literature review / Defense / Seminar | #FFFFFF | #1B3A5C navy | #2D2D2D |
+| business | Business | Work summary / Annual report | #FFFFFF | #0052D9 corp blue | #333333 |
+| minimal  | Minimal | Share-out / TED talk | #FFFFFF | #2D5BD7 blue | #2A2A2F |
+| data_report | Data Report | Annual report / Analysis | #FFFFFF | #1976D2 blue | #212121 |
+| teaching | Teaching | Training / Course | #FFFDF5 warm white | #2196F3 blue | #333333 |
+| product  | Product Launch | Brand / Promo | #1D1D1F dark gray | #6366F1 purple | #E8E8EC |
 
-通用规则:
-- 全篇 ≤ 4 种颜色 (主色+强调色+正文+灰色)
-- 正文 ≥ 18pt, 注释 ≥ 14pt
-- 禁止纯黑底 (#000) / 纯白底 (#FFF)
-- 禁止五颜六色 (单页 > 5 色调)
-- 四边安全区 ≥ 48pt
+General rules:
+- <= 4 colors per deck (primary + accent + body + gray)
+- Body text >= 18pt, captions >= 14pt
+- No pure black (#000) / pure white (#FFF) backgrounds
+- No rainbow effect (<= 5 hues per slide)
+- Four-side safe zone >= 48pt
 
-选择模板后，引擎会在生成时自动校验美观性规则。
+After selecting a template, the engine auto-validates aesthetics rules during generation.
 """

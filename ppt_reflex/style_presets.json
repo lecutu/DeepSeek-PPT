@@ -1,7 +1,7 @@
 {
   "_meta": {
     "version": "2.0",
-    "description": "六种风格预设 + 图片布局策略一体化。每种风格定义色彩/字体/形状 + image_layout 控制图片落位模式。AI 选定 preset 后图片规则随之锁定。",
+    "description": "Six style presets with integrated image layout strategies. Each style defines colors/fonts/shapes + image_layout controls image placement modes. AI selects a preset — all image rules lock in.",
     "one_per_deck": true,
     "modifiable": true
   },
@@ -22,8 +22,8 @@
   },
   "presets": {
     "corporate_minimal": {
-      "display_name": "商务极简",
-      "mood": "专业、冷静、可信",
+      "display_name": "Corporate Minimal",
+      "mood": "Professional, calm, trustworthy",
       "theme": "light",
       "color_override": {
         "bg": "#FFFFFF",
@@ -48,7 +48,7 @@
         "scale_body": 14
       },
       "image_layout": {
-        "philosophy": "图片是论据的视觉证据，不是氛围装饰",
+        "philosophy": "Images are visual evidence for arguments, not atmospheric decoration",
         "preferred_modes": ["hero_right", "hero_left", "center_float"],
         "mode_constraints": {
           "hero_right": {
@@ -89,14 +89,14 @@
         }
       },
       "guidelines": [
-        "一页一个强调色落点，其余全灰阶",
-        "用细线分隔区块而非色块堆叠",
-        "禁止渐变、发光、大圆角"
+        "One accent point per page, everything else grayscale",
+        "Use thin lines to separate sections, not color blocks",
+        "No gradients, glows, or large rounded corners"
       ]
     },
     "tech_dark": {
-      "display_name": "科技深色",
-      "mood": "前沿、沉浸、戏剧化",
+      "display_name": "Tech Dark",
+      "mood": "Cutting-edge, immersive, dramatic",
       "theme": "dark",
       "color_override": {
         "bg": "#0B1020",
@@ -122,7 +122,7 @@
         "scale_body": 14
       },
       "image_layout": {
-        "philosophy": "图片是暗场中的发光窗口",
+        "philosophy": "Images are luminous windows in the dark field",
         "preferred_modes": ["hero_right", "center_float", "hero_top"],
         "mode_constraints": {
           "hero_right": {
@@ -163,14 +163,14 @@
         }
       },
       "guidelines": [
-        "暗场只点 1-2 处霓虹，其余靠灰阶层次",
-        "霓虹强调色块上文字用深色 on_accent",
-        "禁止白字落亮霓虹填充块"
+        "1-2 neon points in dark field, rest through grayscale depth",
+        "Use dark on_accent for text on neon accent blocks",
+        "No white text on bright neon fill blocks"
       ]
     },
     "academic_rigorous": {
-      "display_name": "学术严谨",
-      "mood": "严谨、克制、可信",
+      "display_name": "Academic Rigorous",
+      "mood": "Rigorous, restrained, trustworthy",
       "theme": "light",
       "color_override": {
         "bg": "#FBFAF7",
@@ -195,7 +195,7 @@
         "scale_body": 14
       },
       "image_layout": {
-        "philosophy": "图片是 Figure，必须编号+有 caption+被正文引用",
+        "philosophy": "Images are Figures — must be numbered, captioned, and cited in body text",
         "preferred_modes": ["center_float", "hero_top", "hero_right"],
         "mode_constraints": {
           "center_float": {
@@ -221,12 +221,6 @@
             "max_height_pt": 380,
             "anchor": "center",
             "image_ratio": 0.45
-          },
-          "hero_top": {
-            "max_width_pt": 800,
-            "max_height_pt": 280,
-            "anchor": "top_center",
-            "image_ratio": 0.45
           }
         },
         "treatment": {
@@ -242,14 +236,14 @@
         }
       },
       "guidelines": [
-        "衬线标题 + 无衬线正文",
-        "低饱和配色，模拟印刷品质感",
-        "禁止圆角大卡片、阴影、渐变"
+        "Serif headings + sans-serif body",
+        "Low-saturation palette simulating print quality",
+        "No large rounded cards, shadows, or gradients"
       ]
     },
     "editorial_magazine": {
-      "display_name": "杂志编辑",
-      "mood": "高级、有态度、叙事感",
+      "display_name": "Editorial Magazine",
+      "mood": "Premium, assertive, narrative",
       "theme": "light",
       "color_override": {
         "bg": "#F7F4EF",
@@ -274,7 +268,7 @@
         "scale_body": 14
       },
       "image_layout": {
-        "philosophy": "图片是主角，占最大面积，文字是旁白",
+        "philosophy": "Images are the main character — occupy maximum area, text is narration",
         "preferred_modes": ["hero_top", "center_float", "hero_left"],
         "mode_constraints": {
           "hero_top": {
@@ -315,14 +309,14 @@
         }
       },
       "guidelines": [
-        "超大标题 + 不对称网格 + 硬边构图",
-        "每页一个强视觉锚点，故意做低信息密度",
-        "禁止圆角卡片+阴影的通用模板感"
+        "Oversized titles + asymmetric grid + hard-edge composition",
+        "One strong visual anchor per page, deliberately low information density",
+        "No rounded cards + shadows generic template feel"
       ]
     },
     "creative_vibrant": {
-      "display_name": "创意活力",
-      "mood": "活泼、友好、年轻",
+      "display_name": "Creative Vibrant",
+      "mood": "Lively, friendly, youthful",
       "theme": "light",
       "color_override": {
         "bg": "#FFFDF7",
@@ -347,7 +341,7 @@
         "scale_body": 14
       },
       "image_layout": {
-        "philosophy": "图片是贴纸——大圆角+硬阴影，像手账里的照片",
+        "philosophy": "Images are stickers — large rounded corners + hard shadows, like photos in a scrapbook",
         "preferred_modes": ["center_float", "hero_right", "hero_left"],
         "mode_constraints": {
           "center_float": {
@@ -388,14 +382,14 @@
         }
       },
       "guidelines": [
-        "大圆角 + 重字重 + 贴纸硬阴影",
-        "单页 ≤2 彩色，多色轮换到整份",
-        "装饰几何只放边角点睛"
+        "Large rounded corners + heavy font weight + sticker hard shadows",
+        "≤2 colors per page, rotate colors across deck",
+        "Decorative geometry as corner accents only"
       ]
     },
     "government_solemn": {
-      "display_name": "政务庄重",
-      "mood": "庄重、权威、稳重",
+      "display_name": "Government Solemn",
+      "mood": "Solemn, authoritative, steady",
       "theme": "light",
       "color_override": {
         "bg": "#FFFFFF",
@@ -420,7 +414,7 @@
         "scale_body": 15
       },
       "image_layout": {
-        "philosophy": "图片是工作实证，庄重、清晰、有说明",
+        "philosophy": "Images are documentary evidence — dignified, clear, annotated",
         "preferred_modes": ["hero_top", "hero_right", "center_float"],
         "mode_constraints": {
           "hero_top": {
@@ -461,19 +455,19 @@
         }
       },
       "guidelines": [
-        "标题居中、对称构图",
-        "顶部/底部色带或细红线点缀",
-        "禁止霓虹、渐变、大圆角、贴纸阴影"
+        "Centered titles, symmetric composition",
+        "Top/bottom ribbon or thin red line accent",
+        "No neon, gradients, large rounded corners, or sticker shadows"
       ]
     }
   },
   "layout_mode_decision_tree": {
-    "note": "AI 根据图片宽高比自动选择 layout_mode",
+    "note": "AI auto-selects layout_mode from image aspect ratio",
     "rules": [
-      {"aspect_gt": 1.6, "mode": "hero_top", "reason": "横图适合占上部全宽"},
-      {"aspect_lt": 0.8, "mode": "hero_right", "reason": "竖图适合占一侧"},
-      {"aspect_range": "0.8-1.6", "mode": "center_float", "reason": "方形图居中展示"},
-      {"width_lt": 64, "mode": "small_inline", "reason": "图标嵌入文字流"}
+      {"aspect_gt": 1.6, "mode": "hero_top", "reason": "Landscape images suit full-width top placement"},
+      {"aspect_lt": 0.8, "mode": "hero_right", "reason": "Portrait images suit side placement"},
+      {"aspect_range": "0.8-1.6", "mode": "center_float", "reason": "Square images suit centered display"},
+      {"width_lt": 64, "mode": "small_inline", "reason": "Icons embed in text flow"}
     ]
   }
 }

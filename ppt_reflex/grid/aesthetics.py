@@ -1,7 +1,7 @@
 """
-grid/aesthetics.py — 美观性规则引擎（防丑下限）
-只判量化违规，不判审美优劣。
-所有规则满足: 可量化/可检测/有依据(WCAG 2.1 / 排版学)。
+grid/aesthetics.py — Aesthetics rule engine (ugliness floor)
+Checks quantifiable violations only, never judges aesthetic quality.
+All rules: quantifiable / detectable / grounded (WCAG 2.1 / typography).
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -83,10 +83,10 @@ class AestheticsEngine:
     def _violation(self, rid, cat, pri, ver, eid="", msg="", m=None):
         return AestheticViolation(rid, cat, pri, ver, eid, msg, m or {})
 
-    # ── 对比度 / 不可见文字 / 深浅配 ──
+    # ── Contrast / invisible text / dark-on-light ──
     def _color(self, e):
         v = []
-        # 无文字元素跳过颜色检查（纯形状如 divider/filler 仅有填充色）
+        # Skip color check for text-less elements (pure shapes like divider/filler only have fill)
         if not e.text.strip():
             return v
         try: fc, fillc = hex_to_rgb(e.font_color), hex_to_rgb(e.fill_color)
@@ -96,44 +96,44 @@ class AestheticsEngine:
         if ct < mn:
             lbl = "large_text" if is_large_text(e.font_size, e.font_bold) else "normal_text"
             v.append(self._violation("color_contrast", "color", "P0", Verdict.WARN, e.id,
-                f"对比度 {ct:.1f}:1 < {mn}:1 ({lbl})", {"ratio": round(ct,1), "req": mn}))
+                f"Contrast {ct:.1f}:1 < {mn}:1 ({lbl})", {"ratio": round(ct,1), "req": mn}))
         if e.font_color == e.fill_color and e.font_color not in ("FFFFFF","000000","","transparent","none"):
             v.append(self._violation("invisible_text", "color", "P0", Verdict.BLOCK, e.id,
-                f"文字=填充色({e.font_color})"))
+                f"Text=fill color ({e.font_color})"))
         Lb = luminance_L(fillc); Lt = luminance_L(fc)
         # CIE L*: 0=black, 100=white
         if Lb < 40 and Lt < 40:
             v.append(self._violation("dark_bg_dark_text", "color", "P0", Verdict.WARN, e.id,
-                f"深底(L*={Lb:.0f})配深字(L*={Lt:.0f})", {"bg_L": round(Lb), "tx_L": round(Lt)}))
+                f"Dark bg (L*={Lb:.0f}) + dark text (L*={Lt:.0f})", {"bg_L": round(Lb), "tx_L": round(Lt)}))
         if Lb > 85 and Lt > 85:
             v.append(self._violation("light_bg_light_text", "color", "P0", Verdict.WARN, e.id,
-                f"浅底(L*={Lb:.0f})配浅字(L*={Lt:.0f})", {"bg_L": round(Lb), "tx_L": round(Lt)}))
+                f"Light bg (L*={Lb:.0f}) + light text (L*={Lt:.0f})", {"bg_L": round(Lb), "tx_L": round(Lt)}))
         return v
 
-    # ── 背景色 / 字体颜色 / 配色数量 ──
+    # ── Background / font color / palette size ──
     def _style(self, e, all_elements):
         v = []
         try:
             fillc = hex_to_rgb(e.fill_color)
             Lb = luminance_L(fillc)
-            # P1 WARN: 极深/极纯底影响可读性，但不阻塞——真正不可见由 _color() 的 BLOCK 处理
+            # P1 WARN: extremely dark/pure bg affects readability, but doesn't block — truly invisible handled by _color() BLOCK
             if Lb < 8 and e.content_type in (ContentType.BACKGROUND, ContentType.TEXTBOX):
                 v.append(self._violation("no_black_bg", "style", "P0", Verdict.WARN, e.id,
-                    f"极深底(L*={Lb:.0f})", {"L": round(Lb)}))
+                    f"Near-black bg (L*={Lb:.0f})", {"L": round(Lb)}))
             if Lb > 92 and e.content_type in (ContentType.BACKGROUND, ContentType.TEXTBOX):
                 v.append(self._violation("no_pure_white_bg", "style", "P1", Verdict.WARN, e.id,
-                    f"极浅底(L*={Lb:.0f})", {"L": round(Lb)}))
+                    f"Near-pure-white bg (L*={Lb:.0f})", {"L": round(Lb)}))
         except: pass
-        # 字体颜色检查仅在元素有文字时进行
+        # Font color check only when element has text
         if e.text.strip():
             try:
                 Lt2 = luminance_L(hex_to_rgb(e.font_color))
                 if Lt2 < 5:
                     v.append(self._violation("near_black_text", "style", "P1", Verdict.WARN, e.id,
-                        f"字近黑(L*={Lt2:.0f})", {"L": round(Lt2)}))
+                        f"Near-black text (L*={Lt2:.0f})", {"L": round(Lt2)}))
                 if Lt2 > 98:
                     v.append(self._violation("pure_white_text", "style", "P1", Verdict.WARN, e.id,
-                        f"字纯白(L*={Lt2:.0f})", {"L": round(Lt2)}))
+                        f"Pure-white text (L*={Lt2:.0f})", {"L": round(Lt2)}))
             except: pass
         if all_elements:
             colors = set()
@@ -145,29 +145,29 @@ class AestheticsEngine:
             uq = _unique_hues(colors)
             if len(uq) > 5:
                 v.append(self._violation("max_colors", "style", "P2", Verdict.WARN, "",
-                    f"单页{len(uq)}色调>5", {"count": len(uq)}))
+                    f"Single page {len(uq)} hues > 5", {"count": len(uq)}))
         return v
 
-    # ── 字号 ──
+    # ── Font size ──
     def _font(self, e):
         v = []
         if e.content_type in (ContentType.BACKGROUND, ContentType.IMAGE, ContentType.SHAPE): return v
         if e.font_size < 10:
             v.append(self._violation("font_abs_min", "font", "P0", Verdict.BLOCK, e.id,
-                f"字号{e.font_size}pt<10pt", {"size": e.font_size}))
+                f"Font size {e.font_size}pt < 10pt", {"size": e.font_size}))
         if 10 <= e.font_size < 14 and e.content_type != ContentType.FOOTER:
             v.append(self._violation("font_rec_min", "font", "P1", Verdict.WARN, e.id,
-                f"字号{e.font_size}pt<14pt推荐", {"size": e.font_size}))
+                f"Font size {e.font_size}pt < 14pt recommended", {"size": e.font_size}))
         if e.auto_size == "TEXT_TO_FIT_SHAPE":
             ox, oy, rw, rh = estimate_text_size(e.text, e.font_size, e.line_spacing, e.w, e.h, e.word_wrap)
             if (ox > 2 or oy > 2) and e.h > 0:
                 fitted = e.font_size * min(e.w/max(rw,0.1), e.h/max(rh,0.1))
                 if fitted < 10:
                     v.append(self._violation("autofit_tiny", "font", "P0", Verdict.BLOCK, e.id,
-                        f"自动缩放后{fitted:.0f}pt<10pt", {"fitted": round(fitted,1)}))
+                        f"Auto-fitted {fitted:.0f}pt < 10pt", {"fitted": round(fitted,1)}))
         return v
 
-    # ── 文字溢出 ──
+    # ── Text overflow ──
     def _overflow(self, e):
         v = []
         if e.content_type not in (ContentType.TEXT, ContentType.TEXTBOX): return v
@@ -177,23 +177,23 @@ class AestheticsEngine:
         if e.auto_size == "NONE":
             if not e.word_wrap and ox > 2:
                 v.append(self._violation("overflow_h", "overflow", "P0", Verdict.BLOCK, e.id,
-                    f"水平溢出{ox:.0f}pt(未换行)", {"ox": round(ox,1)}))
+                    f"Horizontal overflow {ox:.0f}pt (no wrap)", {"ox": round(ox,1)}))
             if oy > 2:
                 v.append(self._violation("overflow_v", "overflow", "P0", Verdict.WARN, e.id,
-                    f"垂直溢出{oy:.0f}pt", {"oy": round(oy,1)}))
+                    f"Vertical overflow {oy:.0f}pt", {"oy": round(oy,1)}))
             fixes = []
             fitted = e.font_size * min(e.w/max(rw,0.1), e.h/max(rh,0.1))
-            if fitted >= 10: fixes.append(f"开自动缩放→字号~{fitted:.0f}pt")
-            if not e.word_wrap and ox > 2: fixes.append("开自动换行")
-            fixes.append("扩框适配内容")
-            fixes.append("删减文字或拆到下一页")
+            if fitted >= 10: fixes.append(f"Enable auto-shrink -> font ~{fitted:.0f}pt")
+            if not e.word_wrap and ox > 2: fixes.append("Enable word wrap")
+            fixes.append("Expand box to fit content")
+            fixes.append("Trim text or split to next slide")
             if v: v[-1].metrics["fix_suggestions"] = fixes
         elif e.auto_size == "SHAPE_TO_FIT_TEXT":
             v.append(self._violation("autofit_expand", "overflow", "P1", Verdict.WARN, e.id,
-                f"框将扩张{ox:.0f}x{oy:.0f}pt", {"ox": round(ox,1), "oy": round(oy,1)}))
+                f"Box will expand {ox:.0f}x{oy:.0f}pt", {"ox": round(ox,1), "oy": round(oy,1)}))
         return v
 
-    # ── 间距 ──
+    # ── Spacing ──
     def _spacing(self, elements):
         v = []
         texts = [e for e in elements if e.content_type in (ContentType.TEXT, ContentType.TEXTBOX)]
@@ -203,32 +203,32 @@ class AestheticsEngine:
             me = min(e.x, e.y)
             if 0 < me < 24:
                 v.append(self._violation("edge_margin", "spacing", "P1", Verdict.WARN, e.id,
-                    f"距边{me:.0f}pt<24pt", {"dist": round(me,1)}))
+                    f"Edge margin {me:.0f}pt < 24pt", {"dist": round(me,1)}))
         for i in range(len(texts)-1):
             gap = texts[i+1].y - (texts[i].y + texts[i].h)
             if 0 < gap < 8:
                 v.append(self._violation("tight_gap", "spacing", "P1", Verdict.WARN, texts[i].id,
-                    f"间距{gap:.0f}pt<8pt", {"gap": round(gap,1)}))
+                    f"Gap {gap:.0f}pt < 8pt", {"gap": round(gap,1)}))
         return v
 
-    # ── 密度 ──
+    # ── Density ──
     def _density(self, elements):
         v = []
         occupied = sum(e.w*e.h for e in elements if not e.locked)
         density = occupied/(960*540)
         if density > 0.70:
             v.append(self._violation("density", "density", "P1", Verdict.WARN, "",
-                f"密度{density*100:.0f}%>70%", {"pct": round(density*100,1)}))
+                f"Density {density*100:.0f}% > 70%", {"pct": round(density*100,1)}))
         if len(elements) > 12:
             v.append(self._violation("too_many", "density", "P1", Verdict.WARN, "",
-                f"{len(elements)}元素>12", {"count": len(elements)}))
+                f"{len(elements)} elements > 12", {"count": len(elements)}))
         chars = sum(len(e.text) for e in elements)
         if chars > 300:
             v.append(self._violation("too_much_text", "density", "P1", Verdict.WARN, "",
-                f"{chars}字>300", {"chars": chars}))
+                f"{chars} chars > 300", {"chars": chars}))
         return v
 
-    # ── 对齐 ──
+    # ── Alignment ──
     def _align(self, elements):
         v = []
         non_locked = [e for e in elements if not e.locked]
@@ -238,5 +238,5 @@ class AestheticsEngine:
             off = min(e.x % cell, cell - (e.x % cell), e.y % cell, cell - (e.y % cell))
             if off < 4: continue
             v.append(self._violation("grid_offset", "alignment", "P2", Verdict.WARN, e.id,
-                f"距网格{off:.0f}pt", {"offset": round(off,1)}))
+                f"Grid offset {off:.0f}pt", {"offset": round(off,1)}))
         return v

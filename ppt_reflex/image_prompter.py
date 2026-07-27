@@ -4,16 +4,16 @@ ppt_reflex/image_prompter.py — AI image prompt generator
 Usage:
   from image_prompter import ImagePrompter
   p = ImagePrompter()
-  prompt = p.generate("Li-ion battery charge-discharge mechanism", style="scientific_diagram", template="academic")
+  prompt = p.generate("Li-ion battery charge-discharge mechanism", image_type="scientific_diagram", template="academic")
 
-Output: optimized AI image generation prompts (Midjourney / DALL·E / SD compatible)
+Output: optimized AI image generation prompts (Midjourney / DALL-E / SD compatible)
 """
 
 from __future__ import annotations
 from dataclasses import dataclass, field
 
 # ═══════════════════════════════════════════════════════════
-# Image type × prompt template
+# Image type x prompt template
 # ═══════════════════════════════════════════════════════════
 
 IMAGE_TYPES = {
@@ -99,7 +99,7 @@ IMAGE_TYPES = {
 }
 
 # ═══════════════════════════════════════════════════════════
-# Template palette → image color hints
+# Template palette -> image color hints
 # ═══════════════════════════════════════════════════════════
 
 TEMPLATE_PALETTE_HINTS = {
@@ -156,7 +156,7 @@ PROVIDER_SPECIFICS = {
 
 @dataclass
 class ImagePrompt:
-    """一条 AI 图片提示词"""
+    """An AI image prompt"""
     subject: str
     type: str
     template: str
@@ -181,7 +181,7 @@ class ImagePrompt:
 
 
 class ImagePrompter:
-    """图片 AI 提示词生成器"""
+    """AI image prompt generator"""
 
     def __init__(self, template: str = "academic"):
         self.template = template
@@ -194,7 +194,7 @@ class ImagePrompter:
         image_type: str = "scientific_diagram",
         provider: str = "midjourney",
     ) -> ImagePrompt:
-        """生成一条 AI 图片提示词"""
+        """Generate an AI image prompt"""
         type_cfg = IMAGE_TYPES.get(image_type, IMAGE_TYPES["scientific_diagram"])
         palette = TEMPLATE_PALETTE_HINTS.get(self.template, TEMPLATE_PALETTE_HINTS["academic"])
         prov = PROVIDER_SPECIFICS.get(provider, PROVIDER_SPECIFICS["midjourney"])
@@ -216,7 +216,7 @@ class ImagePrompter:
             provider=provider,
             full_prompt=full,
             negative_prompt=neg_full,
-            style_notes=f"Type: {type_cfg['label']} | Palette: {palette['hint']}",
+            style_notes=f"Type: {type_cfg['Label']} | Palette: {palette['hint']}",
             suggested_provider=self._suggest_provider(image_type),
         )
 
@@ -240,7 +240,7 @@ class ImagePrompter:
         slide_plan: list[dict],
         provider: str = "midjourney",
     ) -> dict[int, ImagePrompt]:
-        """根据幻灯片计划批量生成图片提示词.
+        """Batch generate image prompts from slide plan.
         slide_plan = [{"index": 0, "image_subject": "...", "image_type": "..."}, ...]"""
         result = {}
         for slide in slide_plan:
@@ -315,12 +315,12 @@ The following information MUST be collected before every PPT generation (no skip
 ## Workflow
 
 ```
-User answers → confirm plan → image needs?
-  ├─ User provides image files → use directly
-  ├─ Needs AI generation → ImagePrompter generates prompts → user fetches images
-  └─ No images needed → skip
+User answers -> confirm plan -> image needs?
+  |-- User provides image files -> use directly
+  |-- Needs AI generation -> ImagePrompter generates prompts -> user fetches images
+  |-- No images needed -> skip
 
-  → Generate PPT (grid/ engine) → output to temp dir → user reviews
+  -> Generate PPT (grid/ engine) -> output to temp dir -> user reviews
 ```
 """
 

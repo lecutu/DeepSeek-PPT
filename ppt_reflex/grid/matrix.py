@@ -1,8 +1,8 @@
 """
-grid/matrix.py — 碰撞判定：仅 entity_table 内跑排他检查。
+grid/matrix.py — Collision detection: exclusive checks within entity_table only.
 
-语义角色 (SemanticRole) 决定表分配，表决定是否碰撞。
-overlay 元素 (CONNECTOR/ANNOTATION/EMPHASIS/BACKDROP) 不参与碰撞。
+SemanticRole determines table assignment; table determines collision behavior.
+Overlay elements (CONNECTOR/ANNOTATION/EMPHASIS/BACKDROP) never collide.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from .info_grid import InformationGrid, InfoCell
 
 
 class InteractionMatrix:
-    """Entity × Entity → BLOCK/ALLOW/WARN。Overlay 元素不参与。"""
+    """Entity x Entity -> BLOCK/ALLOW/WARN. Overlay elements never participate."""
 
     def __init__(self, config: GridConfig | None = None):
         self.config = config or GridConfig()
@@ -22,13 +22,13 @@ class InteractionMatrix:
     def check_all(self, covered_cells: list[tuple[str, InfoCell]],
                   new_type: ContentType, new_id: str,
                   new_role: SemanticRole = SemanticRole.ENTITY) -> list[Conflict]:
-        """检查新元素与已存在元素的冲突。
+        """Check new element against existing ones.
 
-        核心规则：
-          1. overlay 元素永远不触发碰撞（不跟任何东西比）
-          2. entity × entity → BLOCK（实体之间互斥）
-          3. 同一 owner、locked、BACKGROUND → 跳过
-          4. CONNECTOR ContentType 已废除碰撞豁免——role 取代了它
+        Core rules:
+          1. overlay elements never trigger collision (don't compare to anything)
+          2. entity x entity -> BLOCK (entities are mutually exclusive)
+          3. same owner, locked, BACKGROUND -> skip
+          4. CONNECTOR ContentType collision exemption is deprecated — role replaces it
         """
         conflicts: list[Conflict] = []
 
@@ -46,11 +46,11 @@ class InteractionMatrix:
             if cell.content_type == ContentType.BACKGROUND:
                 continue
 
-            # Existing overlay → never blocks a new entity
+            # Existing overlay -> never blocks a new entity
             if cell.role not in ENTITY_ROLES:
                 continue
 
-            # Entity × Entity → BLOCK
+            # Entity x Entity -> BLOCK
             conflict = Conflict(
                 cell_addr=addr,
                 existing_id=cell.owner_id,
@@ -73,7 +73,7 @@ class InteractionMatrix:
         return conflicts
 
     def judge(self, existing_type: ContentType, new_type: ContentType) -> Verdict:
-        """Legacy two-type → Verdict. Always ALLOW — collision is role-driven now."""
+        """Legacy two-type -> Verdict. Always ALLOW — collision is role-driven now."""
         return Verdict.ALLOW
 
     def z_hint(self, existing_type: ContentType, new_type: ContentType) -> str | None:

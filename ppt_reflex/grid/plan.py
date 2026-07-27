@@ -1,8 +1,9 @@
 """
-grid/plan.py — Phase 0 数据类
+grid/plan.py — Phase 0 data classes
 
-哲学：引擎只算真相+给菜单，绝不静默改 AI 声明。
-allow_shrink / allow_wrap 默认 False，逼第一轮必出诊断、必进第二轮，回路因此转起来。
+Philosophy: engine only computes truth and provides menus, never silently mutates AI declarations.
+allow_shrink / allow_wrap default False — forces round 1 to always produce diagnostics,
+forcing round 2, closing the loop.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from .types import ContentType, ElementPayload
 
 @dataclass
 class FeedbackBundle:
-    """引擎→AI 的结构化反馈。用于 build_plan(feedback) 回调。"""
+    """Engine->AI structured feedback. Used for build_plan(feedback) callback."""
     round: int = 0
     blocked: bool = False
     blocking_count: int = 0
@@ -24,8 +25,8 @@ class FeedbackBundle:
 
 @dataclass
 class LayoutDiagnostic:
-    """引擎给 AI 的『问题+建议』。severity=error 阻塞，warning 不阻塞。
-    options 是带数字代价的菜单，选哪条是 AI 的语义决策。"""
+    """Engine->AI 'problem+suggestion'. severity=error blocks, warning does not.
+    options is a menu with numeric costs — which to pick is the AI's semantic decision."""
     kind: str = ""                  # region_out_of_page | inline_overflow | text_wrap | deco_out_of_page
     severity: str = "error"
     region_id: str = ""
@@ -39,7 +40,7 @@ class LayoutDiagnostic:
 
 @dataclass
 class Region:
-    """AI 声明的布局区。content_inset 是区内安全边距，allow_auto_shrink 是区域级缩放授权。"""
+    """AI-declared layout zone. content_inset is the internal safe margin. allow_auto_shrink is zone-level scale authorization."""
     region_id: str = ""
     x: float = 0.0
     y: float = 0.0
@@ -48,7 +49,7 @@ class Region:
     purpose: str = ""
     reading_order: int = 0
     content_inset: float = 12.0
-    allow_auto_shrink: bool = False  # region 级授权等比缩，优先于元素级
+    allow_auto_shrink: bool = False  # zone-level uniform shrink auth, takes priority over element-level
     elements: list[str] = field(default_factory=list)
 
     @property
@@ -59,8 +60,8 @@ class Region:
 
 @dataclass
 class Phase1Element:
-    """AI 对信息层元素的意图声明。allow_shrink/allow_wrap 默认 False。
-    ARROW_SLOT 是引擎为装饰预留的视觉间隙（箭头+标签宽度总和）。"""
+    """AI's intent declaration for an information-layer element. allow_shrink/allow_wrap default False.
+    ARROW_SLOT is the visual gap the engine reserves for decorations (arrow+label width total)."""
     elem_id: str = ""
     region_id: str = ""
     content_type: ContentType = field(default=ContentType.UNKNOWN)
@@ -70,13 +71,13 @@ class Phase1Element:
     margin_above: float = 6.0
     preferred_width: float | None = None
     preferred_height: float | None = None
-    allow_shrink: bool = False        # True → 引擎可对此元素等比缩（全块同比例）
-    allow_wrap: bool = False          # True → 文本换行可接受，引擎不报掉行 warning
-    ARROW_SLOT: float = 48.0          # 引擎为内联装饰（箭头+标签）预留的水平槽位
+    allow_shrink: bool = False        # True -> engine may proportionally shrink this element (same ratio for whole block)
+    allow_wrap: bool = False          # True -> text wrapping is acceptable, engine won't warn on line wrap
+    ARROW_SLOT: float = 48.0          # horizontal slot reserved by engine for inline decor (arrow+label)
 
     @classmethod
     def arrow_gap(cls, elems):
-        """取一组 inline 元素中第一个的 ARROW_SLOT 作为间隙。"""
+        """Take the ARROW_SLOT of the first inline element as gap."""
         if not elems:
             return 48.0
         try:
@@ -87,7 +88,7 @@ class Phase1Element:
 
 @dataclass
 class DecoIntent:
-    """AI 对装饰元素的意图——引用+规则，不传坐标。"""
+    """AI's intent for a decoration element — references+rules, no coordinates passed."""
     deco_id: str = ""
     deco_type: str = "arrow"
     relative_to: list[str] = field(default_factory=list)
@@ -102,7 +103,7 @@ class DecoIntent:
 
 @dataclass
 class DecorationSpec:
-    """Phase 2 解析后的装饰坐标——所有值已锁定为 pt。"""
+    """Phase 2 resolved decoration coordinates — all values locked in pt."""
     deco_id: str = ""
     deco_type: str = ""
     x1: float = 0.0
@@ -120,7 +121,7 @@ class DecorationSpec:
 
 @dataclass
 class PageElement:
-    """Phase 1 锁定后的信息层元素——坐标不可变，下游只读。"""
+    """Phase 1 locked information-layer element — coordinates immutable, downstream read-only."""
     elem_id: str = ""
     region_id: str = ""
     content_type: ContentType = ContentType.UNKNOWN
@@ -140,7 +141,7 @@ class PageElement:
 
 @dataclass
 class LayoutPlan:
-    """一张幻灯片的完整规划。diagnostics 是引擎→AI 的反馈通道。"""
+    """Complete plan for one slide. diagnostics is the engine->AI feedback channel."""
     page_w: float = 960.0
     page_h: float = 540.0
     page_safe_inset: float = 12.0
@@ -171,7 +172,7 @@ class LayoutPlan:
         return None
 
     def validate(self, *, verbose: bool = True) -> list[str]:
-        """只量、只报，绝不 mutate region。越界 → 诊断（带建议坐标菜单）。"""
+        """Measure and report only, never mutate region. Out-of-bounds -> diagnostic (with suggested coordinate menu)."""
         issues: list[str] = []
         inset = self.page_safe_inset
         for r in self.regions:
@@ -193,7 +194,7 @@ class LayoutPlan:
             ny = max(inset, r.y)
             nw = max(1.0, min(r.w - (nx - r.x), self.page_w - inset - nx))
             nh = max(1.0, min(r.h - (ny - r.y), self.page_h - inset - ny))
-            msg = f"region 探出页面: {'; '.join(probs)}"
+            msg = f"region out of page: {'; '.join(probs)}"
             issues.append(f"{r.region_id}: {msg}")
             self.diagnostics.append(LayoutDiagnostic(
                 kind="region_out_of_page", severity="error", region_id=r.region_id,
@@ -201,11 +202,11 @@ class LayoutPlan:
                 over_by_pt=max(0.0, right - self.page_w),
                 message=msg,
                 options=[
-                    f"把 region 改为 x={nx:.0f} y={ny:.0f} w={nw:.0f} h={nh:.0f}（夹回页面内）",
-                    f"或整体左移/缩宽，使右边缘 <= {self.page_w - inset:.0f}",
-                    "若该 region 本就该这么宽 -> 检查 page_w 是否与真实渲染宽一致",
+                    f"set region to x={nx:.0f} y={ny:.0f} w={nw:.0f} h={nh:.0f} (clamp into page)",
+                    f"or shift left/shrink width so right edge <= {self.page_w - inset:.0f}",
+                    "if this region should be this wide -> check page_w matches actual render width",
                 ],
             ))
             if verbose:
-                print(f"[VALIDATE][{r.region_id}] {msg} -> 建议 x={nx:.0f} y={ny:.0f} w={nw:.0f} h={nh:.0f}")
+                print(f"[VALIDATE][{r.region_id}] {msg} -> suggest x={nx:.0f} y={ny:.0f} w={nw:.0f} h={nh:.0f}")
         return issues

@@ -1,10 +1,10 @@
 """
-grid/orchestrator.py — AI→引擎→诊断→AI 重排→引擎 回路
+grid/orchestrator.py — AI->engine->diagnostics->AI re-plan->engine loop
 
-引擎只报、不算、不改。allow_shrink 等缩放请求由 AI 在 build_plan 里自己落实
-为新的 preferred_width，引擎不替 AI 做任何数学。
+Engine only reports, computes, never edits. Scaling requests like allow_shrink are
+implemented by the AI in build_plan as new preferred_width. Engine does zero math for the AI.
 
-僵持检测: 连续 2 轮诊断不减少 → 上报人工。
+Stalemate detection: 2 consecutive rounds with no diagnostic reduction -> escalate to human.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from .plan import LayoutPlan, LayoutDiagnostic, FeedbackBundle
 
 def build_feedback(plan: LayoutPlan, rnd: int, prev_count: int,
                    force_relayout: bool) -> FeedbackBundle:
-    """引擎→AI 的反馈。force_relayout 意味着不允许微调，必须全新布局。"""
+    """Engine->AI feedback. force_relayout means no micro-fixes allowed, must fully re-layout."""
     diags = plan.diagnostics
     blocking = [d for d in diags if d.severity == "error"]
     warnings = [d for d in diags if d.severity == "warning"]
@@ -35,17 +35,17 @@ def build_feedback(plan: LayoutPlan, rnd: int, prev_count: int,
 
 
 def _format_message(rnd, blocking, warnings, force):
-    lines = [f"== 第 {rnd} 轮引擎反馈 =="]
+    lines = [f"== Round {rnd} engine feedback =="]
     if force:
-        lines.append("**本轮必须完全重构布局**——微调已失效。")
-    lines.append(f"阻塞项: {len(blocking)}，警告项: {len(warnings)}")
+        lines.append("**This round requires full re-layout** — micro-fixes exhausted.")
+    lines.append(f"Blocking: {len(blocking)}, warnings: {len(warnings)}")
     for i, b in enumerate(blocking):
         lines.append(f"[E{i+1}] {b.kind}: {b.message}")
         if b.options:
-            lines.append(f"  可选方案: {' | '.join(b.options[:3])}")
+            lines.append(f"  Options: {' | '.join(b.options[:3])}")
     for i, w in enumerate(warnings):
         lines.append(f"[W{i+1}] {w.kind}: {w.message}")
-    lines.append("\n请 build_plan(feedback) 返回全新或修改后的 LayoutPlan。")
+    lines.append("\nCall build_plan(feedback) with a new or modified LayoutPlan.")
     return "\n".join(lines)
 
 
@@ -54,8 +54,8 @@ def layout_loop(build_plan, render, canvas, *, max_rounds: int = 4):
     build_plan(feedback: FeedbackBundle | None) -> LayoutPlan
     render(plan, locked, deco) -> None
 
-    返回值: (plan, locked, deco, diagnostics, stalemated)
-      stalemated=True → 引擎解决不了，提示用户
+    Returns: (plan, locked, deco, diagnostics, stalemated)
+      stalemated=True -> engine cannot resolve, prompt user
     """
     from .phase1 import execute_phase1, audit_plan
     from .phase2 import execute_phase2
@@ -82,24 +82,24 @@ def layout_loop(build_plan, render, canvas, *, max_rounds: int = 4):
             render(plan, locked, deco)
             return plan, locked, deco, plan.diagnostics, False
 
-        # ── 僵持检测 ──
+        # ── Stalemate detection ──
         if cur_error_count >= prev_error_count:
             stale_count += 1
         else:
             stale_count = 0
         prev_error_count = cur_error_count
 
-        force = stale_count >= 2  # 两轮不改善 → 强制重构
+        force = stale_count >= 2  # two rounds no improvement -> force full re-layout
 
         feedback_bundle = build_feedback(plan, rnd, prev_error_count, force)
         print(feedback_bundle.message)
 
-        # 预览
+        # Preview
         render(plan, locked, deco)
 
         if force:
-            print("[LOOP] STALEMATE — 连续两轮引擎诊断未减少，强制要求完全重构布局")
+            print("[LOOP] STALEMATE — two consecutive rounds with no diagnostic reduction, forcing full re-layout")
         if rnd == max_rounds:
-            print("[LOOP] MAX ROUNDS — 引擎无法自动解决，需人工介入")
+            print("[LOOP] MAX ROUNDS — engine cannot resolve automatically, human intervention needed")
 
     return plan, locked, deco, plan.diagnostics, True  # stalemated

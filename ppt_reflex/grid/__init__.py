@@ -1,5 +1,5 @@
-"""grid/__init__.py — 🔒 内部引擎。直接调用会被 Builder 绕过诊断回路，产生空白文字。
-AI Agent 请一律使用:
+"""grid/__init__.py — INTERNAL ENGINE. Direct calls bypass diagnostic loop, silent output possible.
+AI agents MUST use:
     from ppt_reflex.builder import PPTBuilder
     builder = PPTBuilder(template="academic")
     builder.add_slide(...)
