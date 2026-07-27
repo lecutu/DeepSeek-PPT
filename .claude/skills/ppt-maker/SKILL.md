@@ -1,44 +1,95 @@
 # ppt-maker — PPT Creation Entry Point
 
+**STOP. Do NOT read ppt_reflex/ source code. Do NOT import from grid/. Do NOT explore the repo.**
+
+Everything you need is in this doc. If something isn't here, it doesn't exist. Use the zero-error skeleton below — it builds with 0 errors on first try.
+
 ## Rules
 
 ```
-Every launch MUST ask these questions, no skipping:
+Every launch MUST ask:
   1. What to make? (topic / occasion / template)
   2. What content? (text / data / images / number of slides)
+  3. Image source? (user files / AI generation / none)
 
-Images MUST confirm source:
-  User provides files → use directly
-  Needs AI generation → ImagePrompter outputs prompts → user fetches images → resume
-  No images needed → skip
+NEVER decide image sources for the user. NEVER skip the questionnaire.
 ```
 
-## Workflow
+## Zero-Error Recipe — USE THIS FIRST, every time
 
-```
-/ppt
-  │
-  ├─ Step 0: Display questionnaire
-  │   Ask: ① What? ② Content? ③ Image needs? ④ Template preference?
-  │
-  ├─ Step 1: Show plan → user confirms
-  │   Slide count / content per slide / image list / template & colors
-  │
-  ├─ Step 2: Image processing (if images needed)
-  │   ├─ User provides file paths → verify files exist
-  │   └─ Needs AI generation → ImagePrompter.generate() → show prompts
-  │       → wait for user to provide generated image file paths
-  │       → prompt format: Midjourney/DALL·E/SD, colors match template
-  │
-  ├─ Step 3: Generate PPT
-  │   ├─ PPTBuilder(template="minimal", style="tech_dark")
-  │   ├─ Slide-by-slide → add_slide(regions, elements, arrows)
-  │   └─ build("output.pptx") → read r["diagnostics"] → fix if needed
-  │
-  └─ Step 4: Output → temp dir → user opens and reviews
+**The skeleton below builds with 0 errors. Start here, then add content.**
+
+```python
+from ppt_reflex.builder import PPTBuilder
+
+b = PPTBuilder(template="minimal", style="tech_dark")
+ACCENT = (34, 211, 238)
+WARN = (251, 113, 133)
+DARK = (16, 26, 45)
+
+b.add_slide("Title",
+    regions=[
+        ("header", 60, 30, 840, 60, 1),        # ≥60pt tall for titles
+        ("main", 60, 110, 520, 380, 2),         # big enough for bullets
+        ("sidebar", 600, 110, 300, 200, 3),
+    ],
+    elements=[
+        b.title("Your Slide Title", region="header"),                   # SAFE
+        b.text("A subtitle goes here", style="Caption", region="main"),  # SAFE
+        b.bullet("Point one", region="main"),                            # SAFE
+        b.bullet("Point two", region="main"),                            # SAFE
+        b.box("Key takeaway in a card", style="Body", region="sidebar",
+              fill_color=DARK, shape_id="rounded_rectangle"),            # SAFE — auto-height
+        b.shape("hexagon", region="sidebar", fill_color=ACCENT, pw=60, ph=45),  # SAFE
+    ],
+)
+
+r = b.build("output.pptx")
+print(r["summary"])
+errs = [d for d in r["diagnostics"] if d["severity"] == "error"]
+print(f"Errors: {len(errs)}")  # Should be 0
 ```
 
-## PPTBuilder API — Single entry point, do NOT explore source
+### Guaranteed errors — NEVER use these
+
+| ❌ NEVER | Why it breaks | Error |
+|:--|:--|:--|
+| `b.text("...", style="Heading")` in header region | 28pt bold → needs ~49pt height, header is 50pt → overflow after inset | `overflow_vertical` |
+| `b.text("...", style="Subheading")` in small region | 20pt font → box too small after inset | `overflow_vertical` |
+| `b.text("...", style="Emphasis")` | same problem — bold 16pt → needs > allocated | `overflow_vertical` |
+| `b.text("...", style="Body")` in fixed-height region | Body is 18pt, box auto-grows but may still clip | `overflow_vertical` roundtrip error |
+| `b.image(..., caption="...")` | Caption text triggers overflow check | `overflow_vertical` |
+| `template="product"` + `style="creative_vibrant"` | creative_vibrant overrides bg to light → white text invisible | `tri_bg_fill` contrast BLOCK |
+| Any light-bg template + any dark-bg style | Theme mismatch → white text on white | `invisible_text` BLOCK |
+
+### Safe patterns — always zero errors
+
+| ✅ ALWAYS SAFE | Why |
+|:--|:--|
+| `template="product"` + `style="tech_dark"` | Genuinely dark bg, neon text works |
+| `template="minimal"` + `style="tech_dark"` | Also safe — tech_dark respects dark intent |
+| `b.title("...", region="header")` | Has built-in ph=40 margin — won't overflow |
+| `b.subtitle("...", region="header")` | 18pt, ph=30 — safe in header regions |
+| `b.text("...", style="Caption")` | 10pt font fits in ANY region |
+| `b.bullet("...")` | 13pt, no fixed box — auto-flow, never overflows |
+| `b.box("...", fill_color=DARK, style="Body")` | Box auto-expands height — no overflow |
+| `b.shape(...)` | Pure graphics, no text → no overflow possible |
+| `b.image(..., layout_mode="hero_top")` | No caption = no text overflow |
+| `b.divider(...)` | Always safe, no text |
+| `b.arrow(...)` | Always safe, decoration only |
+
+### Key rules
+
+- **header region ≥ 60pt tall** for `b.title()`. 50pt is too short.
+- **For text content: use `b.box()` not `b.text(Body)`.** Box auto-expands; Body text in fixed regions overflows.
+- **For headings: use `b.title()` only.** Never `b.text(style="Heading")`.
+- **Images: no captions.** `caption=""` or omit.
+- **Dark themes: `product` template ONLY with `tech_dark` style.** Nothing else.
+- **First build with skeleton. Iterate from 0 errors.** Don't start from scratch.
+
+---
+
+## PPTBuilder API Reference
 
 ### Init
 
@@ -62,25 +113,62 @@ b = PPTBuilder(template="minimal", style="tech_dark")
 
 `academic_rigorous` | `corporate_minimal` | `tech_dark` | `editorial_magazine` | `creative_vibrant` | `government_solemn`
 
-### Element API
+### add_slide — full signature
 
 ```python
-b.title("Title", region="header")                           # 28pt bold, centered, ph=40
-b.subtitle("Subtitle", region="header")                     # 18pt, gray, ph=30
-b.text("Body text", style="Body", region="main")            # style: Body|Subheading|Caption|Emphasis
-b.bullet("List item", region="main")                        # auto-prefixed with •
-b.box("Card content", style="Body", region="card1",
-      fill_color=(16,26,45), shape_id="rounded_rectangle")   # text card, auto-height
-b.shape("hexagon", region="center", fill_color=(34,211,238),
-         pw=100, ph=60)                                     # decorative shape, pw/ph required
-b.image("path/img.jpg", region="hero",
-        layout_mode="hero_top", caption="Figure 1.")         # auto contain-fit
-b.arrow(from_elem, to_elem, "label", "below",
-         color=(34,211,238), text_font_size=9)               # from/to accept _Spec objects
-b.divider(region="main", color=(34,211,238), width_pt=2.0)   # horizontal rule
+b.add_slide("Slide title",
+    regions=[
+        ("header", 60, 30, 840, 60, 1),           # (name, x, y, w, h, z_order)
+        ("main", 60, 110, 520, 380, 2),            # lower z_order = behind
+        ("sidebar", 600, 110, 300, 200, 3),
+    ],
+    elements=[
+        b.title("Title", region="header"),          # 28pt bold, centered, ph=40
+        b.bullet("Point", region="main"),           # 13pt, auto-flow
+        b.box("Card", style="Body", region="sidebar",
+              fill_color=(16,26,45)),               # auto-height
+    ],
+    arrows=[
+        b.arrow(from_elem, to_elem, "label", "below",
+                color=(34,211,238)),                # from/to accept _Spec objects
+    ],
+)
 ```
 
-### Shape IDs
+### Element API — every method
+
+```python
+# TEXT (safe: title/subtitle/Caption only)
+b.title("Title text", region="header")                  # ⭐ Use this for headings — NOT b.text(Heading)
+b.subtitle("Subtitle text", region="header")            # 18pt, gray, ph=30
+b.text("Body text", style="Caption", region="main")     # ⭐ Use Caption — NOT Body/Heading/Emphasis/Subheading
+b.text("Raw text", style="Subheading", region="main")   # ⚠ Only in LARGE regions (≥120pt tall)
+
+# LISTS — always safe
+b.bullet("List item text", region="main")               # 13pt, auto-flow — ALWAYS SAFE
+
+# CARDS — always safe (auto-height)
+b.box("Card content here\n\nMultiple paragraphs OK",
+      style="Body", region="card",                      # style: Body only (not Heading/Subheading)
+      fill_color=(16,26,45),                             # dark fill → white text automatic
+      shape_id="rounded_rectangle")                      # 20 shapes available (see below)
+
+# SHAPES — always safe (pure graphics)
+b.shape("hexagon", region="center",                     # 20 shape IDs (see below)
+        fill_color=(34,211,238), pw=100, ph=60)         # pw/ph REQUIRED for shapes
+
+# IMAGES — safe without caption
+b.image("path/to/img.jpg", region="hero",
+        layout_mode="hero_top",                          # 7 modes (see below)
+        caption="")                                      # ⭐ Empty caption = safe. NEVER add caption text.
+
+# DECORATION — always safe
+b.divider(region="main", color=(34,211,238), width_pt=2.0)
+b.arrow(elem_a, elem_b, "label text", "below",          # elem_a/elem_b = _Spec objects from b.box/b.shape
+        color=(34,211,238), text_font_size=9)
+```
+
+### Shape IDs (for shape_id and b.shape)
 
 `rounded_rectangle` `rectangle` `oval` `parallelogram` `diamond` `chevron`
 `pentagon` `hexagon` `up_arrow` `down_arrow` `left_arrow` `right_arrow`
@@ -90,177 +178,168 @@ b.divider(region="main", color=(34,211,238), width_pt=2.0)   # horizontal rule
 
 `hero_top` `hero_right` `hero_left` `center_float` `small_inline` `grid_2x2` `grid_1x3`
 
-Or let the engine infer: `b.auto_layout_mode("img.jpg")` — picks mode from aspect ratio:
+Or auto-infer: `b.auto_layout_mode("img.jpg")` — picks mode from aspect ratio:
 
-| Aspect ratio | Auto mode | What happens |
+| Aspect ratio | Auto mode | Behavior |
 |:--|:--|:--|
-| >1.6 (wide / panorama) | `hero_top` | full-width banner |
-| <0.8 (tall / portrait) | `hero_right` | right-side column |
-| 0.8–1.6 (square / screenshot) | `center_float` | centered, contain-fit, never cropped |
+| >1.6 (wide / panorama) | `hero_top` | full-width banner, contain-fit |
+| <0.8 (tall / portrait) | `hero_right` | right-side column, contain-fit |
+| 0.8–1.6 (square / screenshot) | `center_float` | centered, contain-fit, NEVER cropped |
 
-**Screenshots, irregular crops, phone captures — just pass the file.** `fit_mode="fit"` is default: image is always fully visible, aspect ratio preserved, nothing cropped. The 6 `image_type` values below are for AI *generation* only (ImagePrompter), not for user-provided files.
+**Screenshots, irregular crops, phone captures — just pass the file.** `fit_mode="fit"` is default: image fully visible, aspect ratio preserved, nothing cropped.
 
-### add_slide — full signature
-
-```python
-b.add_slide("Slide title",
-    regions=[
-        ("header", 60, 30, 840, 50, 1),           # (name, x, y, w, h, z_order)
-        ("main", 60, 100, 520, 380, 2),            # lower z_order = behind
-        ("sidebar", 600, 100, 300, 380, 3),
-    ],
-    elements=[...],
-    arrows=[...],
-)
-```
-
-### Build + diagnostics
+### Build + read diagnostics
 
 ```python
 r = b.build("output.pptx")
-# r = {"ok": bool, "summary": str, "diagnostics": [...], "path": str}
+# Returns: {"ok": bool, "summary": str, "diagnostics": list, "path": str}
 
 for d in r["diagnostics"]:
     if d["severity"] == "error":
+        # d keys: slide, phase, kind, severity, elem_id, message
         print(f"S{d['slide']:02d} [{d['phase']}] {d['kind']}: {d['message']}")
 ```
 
-### AI Image Prompt Generation
+### Open generated file
+
+```python
+import os; os.startfile("output.pptx")
+```
+
+### AI Image Prompt Generation (ImagePrompter)
 
 ```python
 from ppt_reflex.image_prompter import ImagePrompter
-
 p = ImagePrompter(template="academic")
-prompt = p.generate(
-    subject="SiOC anode charge-discharge mechanism diagram",
-    image_type="scientific_diagram",
-    provider="midjourney",
-)
-print(prompt.full_prompt)
+prompt = p.generate(subject="topic", image_type="scientific_diagram", provider="midjourney")
+print(prompt.full_prompt)       # paste into AI image tool
 print(prompt.negative_prompt)
-print(prompt.style_notes)
 ```
 
-6 image types:
+6 image types (for AI GENERATION only, not user-provided files):
 
-| Type | Use Case | Recommended Tool | Aspect |
+| Type | Use Case | Tool | Aspect |
 |:--|:--|:--|:--|
-| scientific_diagram | Mechanism / workflow / methodology | Midjourney | 16:9 |
-| experiment_photo | Equipment / samples / lab scenes | Midjourney | 4:3 |
-| data_chart | Data viz / comparison / infographic | Midjourney | 16:9 |
-| concept_illustration | Abstract concepts / covers | Midjourney | 16:9 |
-| material_structure | Crystal structure / molecular models | Midjourney | 1:1 |
-| hero_image | Title slide / section dividers | DALL·E | 16:9 |
+| `scientific_diagram` | Mechanism / workflow / methodology | Midjourney | 16:9 |
+| `experiment_photo` | Equipment / samples / lab scenes | Midjourney | 4:3 |
+| `data_chart` | Data viz / comparison / infographic | Midjourney | 16:9 |
+| `concept_illustration` | Abstract concepts / covers | Midjourney | 16:9 |
+| `material_structure` | Crystal structure / molecular models | Midjourney | 1:1 |
+| `hero_image` | Title slide / section dividers | DALL·E | 16:9 |
 
-Image colors auto-match the selected template.
+---
 
-## Zero-Error Recipe — first-build guarantee, no debugging loops
-
-### Guaranteed errors (NEVER use these)
-
-| Danger | Why it breaks | Diagnosis |
-|:--|:--|:--|
-| `b.text("...", style="Heading")` in small region | 28pt bold → needs ~49pt, header inset eats 8pt | `overflow_vertical` |
-| `b.text("...", style="Subheading")` | 20pt font in fixed-height box | `overflow_vertical` |
-| `b.text("...", style="Emphasis")` | Bold 16pt still overflows small boxes | `overflow_vertical` |
-| `b.text("...", style="Body")` in fixed region | 18pt → auto-grow may still clip | `overflow_vertical` roundtrip |
-| `b.image(..., caption="...")` | Caption text triggers overflow | `overflow_vertical` |
-| `template="product"` + `style="creative_vibrant"` | creative_vibrant overrides bg to light | `tri_bg_fill` contrast BLOCK |
-| Any light-bg template + dark-bg style mix | Theme mismatch → white on white | `invisible_text` BLOCK |
-
-### Safe patterns (zero errors)
-
-| Safe | Why |
-|:--|:--|
-| `template="product"` + `style="tech_dark"` | Real dark bg, neon text works |
-| `template="minimal"` + `style="tech_dark"` | Also safe |
-| `b.box("...", fill_color=DARK, style="Body")` | Auto-expands height |
-| `b.bullet("...")` | 13pt, auto-flow |
-| `b.shape(...)` | Pure graphics |
-| `b.image(..., layout_mode="hero_top")` — no caption | No text overflow |
-| `b.title("...", region="header")` | Built-in ph=40 margin |
-| `b.text("...", style="Caption")` | 10pt fits anywhere |
-| `b.divider(...)` | Always safe |
-| Header region height ≥ 60pt for titles | Leaves room after 8pt inset |
-
-### Skeleton: zero-error first build
+## Full Example — 3 slides, 0 errors
 
 ```python
 from ppt_reflex.builder import PPTBuilder
 
 b = PPTBuilder(template="minimal", style="tech_dark")
-ACCENT = (34, 211, 238); DARK = (16, 26, 45)
+ACCENT = (34, 211, 238); WARN = (251, 113, 133); DARK = (16, 26, 45)
 
-b.add_slide("Title",
+# Slide 1 — Cover
+b.add_slide("Computer Science's Greatest WTFs",
     regions=[
-        ("header", 60, 30, 840, 60, 1),        # ≥60pt for titles
-        ("main", 60, 110, 520, 380, 2),
-        ("sidebar", 600, 110, 300, 200, 3),
+        ("header", 60, 30, 840, 60, 1),
+        ("hero", 40, 120, 880, 250, 2),
+        ("footer", 60, 400, 840, 100, 3),
     ],
     elements=[
-        b.title("Slide Title", region="header"),
-        b.text("Subtitle", style="Caption", region="main"),
-        b.bullet("Point one", region="main"),
-        b.bullet("Point two", region="main"),
-        b.box("Key takeaway", style="Body", region="sidebar",
-              fill_color=DARK, shape_id="rounded_rectangle"),
-        b.shape("hexagon", region="sidebar", fill_color=ACCENT, pw=60, ph=45),
+        b.title("Computer Science's Greatest WTFs", region="header"),
+        b.shape("star", region="hero", fill_color=WARN, pw=80, ph=80),
+        b.shape("hexagon", region="hero", fill_color=ACCENT, pw=60, ph=60),
+        b.text("A journey through the weirdest corners of computing", style="Caption", region="footer"),
     ],
 )
 
-r = b.build("out.pptx")
-# Expect: 0 errors
-```
+# Slide 2 — Overview with arrows
+hub = b.shape("hexagon", region="center", fill_color=ACCENT, pw=200, ph=80)
+tl = b.box("Esoteric\nLanguages", style="Body", region="top_l", fill_color=DARK)
+tr = b.box("Impossible\nProblems", style="Body", region="top_r", fill_color=DARK)
 
-**Key rules:** use `b.box()` for text content (auto-height), `b.bullet()` for lists, header ≥ 60pt for titles. Never `Heading`/`Subheading`/`Emphasis` in small regions. Images without captions. `product` style ONLY with `tech_dark`.
-
-## Color conventions
-
-- RGB tuples: `(34, 211, 238)` — not hex strings
-- Never pure black `(0,0,0)` or pure white `(255,255,255)`
-- Dark fills auto-invert text to white
-
-## Image sources
-
-- Unsplash: `https://images.unsplash.com/photo-{id}?w=800&q=80`
-- Local files provided by user
-
-## Full example
-
-```python
-from ppt_reflex.builder import PPTBuilder
-
-b = PPTBuilder(template="minimal", style="tech_dark")
-ACCENT = (34, 211, 238); DARK = (16, 26, 45)
-
-b.add_slide("The Weird World of CS",
+b.add_slide("What's On The Menu",
     regions=[
-        ("header", 60, 30, 840, 50, 1),
-        ("main", 60, 100, 520, 400, 2),
-        ("sidebar", 620, 100, 280, 240, 3),
-        ("tip", 620, 370, 280, 130, 4),
+        ("header", 60, 30, 840, 60, 1),
+        ("center", 350, 230, 260, 100, 2),
+        ("top_l", 80, 120, 200, 80, 3),
+        ("top_r", 680, 120, 200, 80, 4),
     ],
     elements=[
-        b.text("Welcome to CS Absurdity", style="Heading", region="header"),
-        b.text("Why Programmers Love Bad Jokes", style="Subheading", region="main"),
-        b.bullet("Because the best ones compile without warnings", region="main"),
-        b.bullet("The first reply on Stack Overflow is always a duplicate flag", region="main"),
-        b.bullet("'It works on my machine' — the 8 most expensive words in software", region="main"),
-        b.shape("hexagon", region="sidebar", fill_color=ACCENT, pw=80, ph=60),
-        b.text("Fun\nFact", style="Heading", region="sidebar"),
-        b.box("Did you know: the npm package `is-odd` gets 5M weekly downloads, depends on `is-number`, which depends on `kind-of`. Checking if a number is odd takes 3 packages.",
+        b.title("Five Realms of Computational Chaos", region="header"),
+        hub, b.title("CS\nChaos", region="center"), tl, tr,
+    ],
+    arrows=[
+        b.arrow(hub, tl, "brain-melting syntax", "above", color=ACCENT),
+        b.arrow(hub, tr, "can't be solved", "above", color=ACCENT),
+    ],
+)
+
+# Slide 3 — Content with bullet lists
+b.add_slide("Brainfuck: 8 Characters of Pain",
+    regions=[
+        ("header", 60, 30, 840, 60, 1),
+        ("main", 60, 100, 520, 380, 2),
+        ("code", 620, 100, 280, 240, 3),
+        ("tip", 620, 370, 280, 110, 4),
+    ],
+    elements=[
+        b.title("The Most Famous Esolang", region="header"),
+        b.bullet("Operates on a 30,000-cell array of bytes — a Turing machine tape", region="main"),
+        b.bullet("[ and ] form loops: \"while current cell != 0, repeat\"", region="main"),
+        b.bullet("Turing-complete — you can write ANY program with 8 symbols", region="main"),
+        b.bullet("\"Hello World\" in Brainfuck is 106 characters of pure punctuation", region="main"),
+        b.box("++++++++[>++++[>++>+++>+++>+<<<<-]\n>+>+>->>+[<]<-]>>\n.>---.+++++++..+++.>>",
+              style="Body", region="code", fill_color=DARK),
+        b.box("Try reading it out loud.\nYour family will stage an intervention.",
               style="Body", region="tip", fill_color=DARK),
     ],
 )
 
-r = b.build("cs_intro.pptx")
+r = b.build("cs_wtf.pptx")
 print(r["summary"])
+# Expect: 0 errors
 ```
 
-## DON'T
+---
 
-- Don't read ppt_reflex/ source code — all APIs are on PPTBuilder
-- Don't import from grid/ directly
-- Don't skip the questionnaire
-- Don't decide image sources for the user
-- Don't modify this SKILL.md
+## Color Conventions
+
+- RGB tuples only: `(34, 211, 238)` — NOT `"#22D3EE"`
+- Never `(0,0,0)` or `(255,255,255)`
+- Dark bg range: `(26,26,46)` — `(16,26,45)`
+- Dark fills auto-invert text to white — no manual color needed
+
+## Image Sources
+
+- Unsplash: `https://images.unsplash.com/photo-{id}?w=800&q=80`
+- User provides local files → `b.image("path/to/file.jpg", ...)`
+- AI generation → `ImagePrompter.generate()` → show prompts → user fetches images → resume
+
+## Workflow — /ppt command
+
+```
+/ppt
+  │
+  ├─ Step 0: Questionnaire — ① Topic? ② Content? ③ Images? ④ Template?
+  │
+  ├─ Step 1: Show plan → user confirms
+  │
+  ├─ Step 2: Image processing (if needed)
+  │
+  ├─ Step 3: Generate using ZERO-ERROR SKELETON
+  │   NEVER start from scratch. Copy skeleton, add content.
+  │   b.title() for headings. b.bullet() for lists. b.box() for text cards.
+  │   Header ≥ 60pt. No captions on images.
+  │
+  └─ Step 4: build() → check diagnostics → output
+```
+
+## DON'T — FINAL WARNING
+
+1. **Do NOT read ppt_reflex/ source code.** All APIs are in this doc.
+2. **Do NOT import from grid/ directly.** Only `from ppt_reflex.builder import PPTBuilder`.
+3. **Do NOT use `b.text(style="Heading")`/`Subheading`/`Emphasis`/`Body`.** Use `b.title()` + `b.box()` + `b.bullet()` instead.
+4. **Do NOT add captions to images.** `caption=""` or omit.
+5. **Do NOT mix light-bg templates with dark-bg styles.** `product` template ONLY with `tech_dark` style.
+6. **Do NOT use 50pt header regions for titles.** Minimum 60pt.
+7. **Do NOT modify this SKILL.md.**
