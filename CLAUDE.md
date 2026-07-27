@@ -1,125 +1,137 @@
-# PPT Reflex — 直接用，别研究
+# PPT Reflex — Use directly, don't explore
 
-## 唯一入口
+## Single entry point
 
 ```python
 from ppt_reflex.builder import PPTBuilder
 b = PPTBuilder(template="minimal", style="tech_dark")
 ```
 
-## 模板 (template)
+## Templates
 
-| template | bg | accent | 特点 |
+| template | bg | accent | vibe |
 |:--|:--|:--|:--|
-| `academic` | white | navy+brick | 严谨、高信息密度 |
-| `business` | white | blue+orange | 专业、结论优先 |
-| `minimal` | white | dark gray+blue | 呼吸感、一页一个信息 |
-| `data_report` | white | blue+orange | 网格感、数据密集 |
-| `teaching` | warm white | vibrant blue+orange | 友好、结构清晰 |
-| `product` | dark gray | indigo+violet | 高级感、暗场、居中 |
+| `academic` | white | navy+brick | rigorous, high info density |
+| `business` | white | blue+orange | professional, conclusion-first |
+| `minimal` | white | dark gray+blue | breathing room, one message per slide |
+| `data_report` | white | blue+orange | grid feel, data-dense |
+| `teaching` | warm white | vibrant blue+orange | friendly, well-structured |
+| `product` | dark gray | indigo+violet | premium, dark bg, centered |
 
-## style (AI 从 style_presets.json 选)
+## Style presets (pick from style_presets.json)
 
-- `academic_rigorous` — 印刷品质感、低饱和
-- `corporate_minimal` — 一页一个强调色、其余灰阶
-- `tech_dark` — 暗场、1-2 处霓虹点缀
-- `editorial_magazine` — 超大标题、不对称网格
-- `creative_vibrant` — 大圆角、贴纸风格
-- `government_solemn` — 对称构图、红色点缀线
+`academic_rigorous` | `corporate_minimal` | `tech_dark` | `editorial_magazine` | `creative_vibrant` | `government_solemn`
 
-## 元素 API (b.xxx)
+## Element API
 
 ```python
-b.title("标题", region="header")                         # 28pt bold, 居中, ph=40
-b.subtitle("副标题", region="header")                     # 18pt, 灰色, ph=30
-b.text("正文内容", style="Body", region="main")           # 14pt, style: Body|Subheading|Caption|Emphasis
-b.bullet("列表项内容", region="main")                     # 自动加 • 前缀, 13pt
-b.box("卡片内容", style="Body", region="card1",
-      fill_color=(16,26,45), shape_id="rounded_rectangle")  # 方形文本卡片
+b.title("Title", region="header")                           # 28pt bold, centered, ph=40
+b.subtitle("Subtitle", region="header")                     # 18pt, gray, ph=30
+b.text("Body text", style="Body", region="main")            # style: Body|Subheading|Caption|Emphasis
+b.bullet("List item", region="main")                        # auto-prefixed with •
+b.box("Card content", style="Body", region="card1",
+      fill_color=(16,26,45), shape_id="rounded_rectangle")   # text card, auto-height
 b.shape("hexagon", region="center", fill_color=(34,211,238),
-         pw=100, ph=60)                                   # 装饰形状, 20种可选
-b.image("path/to/img.jpg", region="hero",
-        layout_mode="hero_top", caption="Figure 1.")     # 图片, 自动 contain-fit
-b.arrow(from_elem, to_elem, "标注文字", "below",
-         color=(34,211,238), text_font_size=9)            # 箭头, from/to 可以是 _Spec 对象
-b.divider(region="main", color=(34,211,238), width_pt=2.0)  # 分割线
+         pw=100, ph=60)                                     # decorative shape, pw/ph required
+b.image("path/img.jpg", region="hero",
+        layout_mode="hero_top", caption="Figure 1.")         # auto contain-fit
+b.arrow(from_elem, to_elem, "label", "below",
+         color=(34,211,238), text_font_size=9)               # from/to accept _Spec objects
+b.divider(region="main", color=(34,211,238), width_pt=2.0)   # horizontal rule
 ```
 
-## 形状 ID (shape_id)
+## Shape IDs
 
 `rounded_rectangle` `rectangle` `oval` `parallelogram` `diamond` `chevron`
 `pentagon` `hexagon` `up_arrow` `down_arrow` `left_arrow` `right_arrow`
 `star` `triangle` `home` `cross` `pie` `wave` `donut` `plaque` `sun`
 
-## 图片布局 (layout_mode)
+## Image layout modes
 
-`hero_top` — 页面顶部横幅, ≤800×280pt
-`hero_right` — 右侧竖图
-`hero_left` — 左侧竖图
-`center_float` — 居中浮动, ≤560×360pt
-`small_inline` — 小图内联
-`grid_2x2` `grid_1x3` — 网格
+`hero_top` `hero_right` `hero_left` `center_float` `small_inline` `grid_2x2` `grid_1x3`
 
-或让引擎自动推断: `b.auto_layout_mode("img.jpg")` → 根据宽高比选模式
+Or auto-infer: `b.auto_layout_mode("img.jpg")`
 
-## 构建 + 读诊断
+## add_slide — full signature
+
+```python
+b.add_slide("Slide title",
+    regions=[
+        ("header", 60, 30, 840, 50, 1),           # (name, x, y, w, h, z_order)
+        ("main", 60, 100, 520, 380, 2),            # lower z_order = behind
+        ("sidebar", 600, 100, 300, 380, 3),
+    ],
+    elements=[...],
+    arrows=[...],
+)
+```
+
+## Build + read diagnostics
 
 ```python
 r = b.build("output.pptx")
-print(r["summary"])  # "313 issues (32 errors, 280 warnings)"
+# r = {"ok": bool, "summary": str, "diagnostics": [...], "path": str}
 
 for d in r["diagnostics"]:
     if d["severity"] == "error":
         print(f"S{d['slide']:02d} [{d['phase']}] {d['kind']}: {d['message']}")
+        # d keys: slide, phase, kind, severity, elem_id, message
 ```
 
-## 完整示例
+## Color conventions
+
+- RGB tuples: `(34, 211, 238)` — not hex strings
+- Never pure black `(0,0,0)` or pure white `(255,255,255)`
+- Dark bg: `(26,26,46)` range
+- Dark fills auto-invert text to white
+
+## Image sources
+
+- Unsplash: `https://images.unsplash.com/photo-{id}?w=800&q=80`
+- Local files provided by user: `b.image("path/to/img.jpg", ...)`
+
+## Full example
 
 ```python
 from ppt_reflex.builder import PPTBuilder
 
 b = PPTBuilder(template="minimal", style="tech_dark")
-ACCENT = (34, 211, 238)
-WARN = (251, 113, 133)
-DARK = (16, 26, 45)
+ACCENT = (34, 211, 238); DARK = (16, 26, 45)
 
-b.add_slide("主题标题",
+b.add_slide("The Weird World of CS",
     regions=[
-        ("header", 60, 30, 840, 50, 1),           # (name, x, y, w, h, z_order)
-        ("hero", 60, 100, 500, 360, 2),            # z_order: 数字越小越底层
-        ("sidebar", 600, 100, 300, 360, 3),
-        ("footer", 60, 480, 840, 30, 4),
+        ("header", 60, 30, 840, 50, 1),
+        ("main", 60, 100, 520, 400, 2),
+        ("sidebar", 620, 100, 280, 240, 3),
+        ("tip", 620, 370, 280, 130, 4),
     ],
     elements=[
-        b.text("页面标题", style="Heading", region="header"),
-        b.bullet("第一条要点", region="hero"),
-        b.bullet("第二条要点", region="hero"),
-        b.bullet("第三条要点", region="hero"),
-        b.box("关键结论放在卡片里", style="Body", region="sidebar",
-              fill_color=DARK, shape_id="rounded_rectangle"),
-        b.text("脚注信息", style="Caption", region="footer"),
+        b.text("Welcome to CS Absurdity", style="Heading", region="header"),
+        b.text("Why Programmers Love Bad Jokes", style="Subheading", region="main"),
+        b.bullet("Because the best ones compile without warnings", region="main"),
+        b.bullet("The first reply on Stack Overflow is always a duplicate flag", region="main"),
+        b.bullet("'It works on my machine' — the 8 most expensive words in software", region="main"),
+        b.shape("hexagon", region="sidebar", fill_color=ACCENT, pw=80, ph=60),
+        b.text("Fun\nFact", style="Heading", region="sidebar"),
+        b.box("Did you know: the npm package `is-odd` gets 5M weekly downloads, depends on `is-number`, which depends on `kind-of`. Checking if a number is odd takes 3 packages.",
+              style="Body", region="tip", fill_color=DARK),
     ],
 )
 
-r = b.build("demo.pptx")
+r = b.build("cs_intro.pptx")
 print(r["summary"])
 ```
 
-## 颜色约定
+## Open generated PPT
 
-- 用 RGB tuple: `(34, 211, 238)` 不是 `"#22D3EE"`
-- bg 不用纯黑 `(0,0,0)` 或纯白 `(255,255,255)`
-- 暗场用 `(26,26,46)` 类似色
-- 图片从 Unsplash: `https://images.unsplash.com/photo-{id}?w=800&q=80`
-
-## 看结果
-
-```powershell
-Start-Process "output.pptx"
+```python
+r = b.build("output.pptx")
+print(r["summary"])
+# Windows: os.startfile("output.pptx")
 ```
 
 ## DON'T
 
-- 不读 ppt_reflex/ 源码 —— 一切 API 都在 PPTBuilder 上
-- 不 import grid/ 内部模块
-- 不手动改 style_presets.json —— 用 `load_style_presets()` / `save_style_presets()`
+- Don't read ppt_reflex/ source code — all APIs are on PPTBuilder
+- Don't import from grid/ directly
+- Don't modify style_presets.json by hand — use `load_style_presets()` / `save_style_presets()`
