@@ -92,6 +92,16 @@
         "One accent point per page, everything else grayscale",
         "Use thin lines to separate sections, not color blocks",
         "No gradients, glows, or large rounded corners"
+      ],
+      "deck_rules": [
+        {"field": "font_family", "tier": "lock", "expected": "Microsoft YaHei", "message": "All slides must use the same font family"},
+        {"field": "require_cover", "tier": "lock", "expected": true, "message": "Deck must start with a cover slide"},
+        {"field": "page_count", "tier": "hint", "expected": [5, 20], "message": "5-20 slides recommended for corporate deck"},
+        {"field": "require_agenda", "tier": "hint", "expected": true, "message": "Consider adding an agenda slide after cover"},
+        {"field": "require_conclusion", "tier": "hint", "expected": true, "message": "End with a conclusion or contact slide"},
+        {"field": "font_size", "tier": "guide", "expected": 14, "tolerance": 0.25, "message": "Body text around 14pt"},
+        {"field": "line_spacing", "tier": "guide", "expected": 1.35, "tolerance": 0.20, "message": "Line spacing around 1.35"},
+        {"field": "title_size", "tier": "guide", "expected": 28, "tolerance": 0.25, "message": "Title around 28pt"}
       ]
     },
     "tech_dark": {
@@ -166,6 +176,16 @@
         "1-2 neon points in dark field, rest through grayscale depth",
         "Use dark on_accent for text on neon accent blocks",
         "No white text on bright neon fill blocks"
+      ],
+      "deck_rules": [
+        {"field": "font_family", "tier": "lock", "expected": "Microsoft YaHei", "message": "All slides must use the same font family"},
+        {"field": "require_cover", "tier": "lock", "expected": true, "message": "Deck must start with a cover slide"},
+        {"field": "page_count", "tier": "hint", "expected": [5, 18], "message": "5-18 slides; dark decks fatigue beyond 18"},
+        {"field": "require_agenda", "tier": "hint", "expected": true, "message": "Consider adding an agenda slide after cover"},
+        {"field": "require_conclusion", "tier": "hint", "expected": true, "message": "End with a conclusion or thank-you slide"},
+        {"field": "font_size", "tier": "guide", "expected": 14, "tolerance": 0.25, "message": "Body text around 14pt"},
+        {"field": "line_spacing", "tier": "guide", "expected": 1.45, "tolerance": 0.20, "message": "Line spacing around 1.45 — dark bg needs more breathing room"},
+        {"field": "title_size", "tier": "guide", "expected": 36, "tolerance": 0.25, "message": "Title around 36pt"}
       ]
     },
     "academic_rigorous": {
@@ -239,6 +259,16 @@
         "Serif headings + sans-serif body",
         "Low-saturation palette simulating print quality",
         "No large rounded cards, shadows, or gradients"
+      ],
+      "deck_rules": [
+        {"field": "font_family", "tier": "lock", "expected": "Microsoft YaHei", "message": "All slides must use the same font family"},
+        {"field": "require_cover", "tier": "lock", "expected": true, "message": "Deck must start with a cover slide"},
+        {"field": "page_count", "tier": "hint", "expected": [8, 40], "message": "8-40 slides typical for academic presentations"},
+        {"field": "require_agenda", "tier": "hint", "expected": true, "message": "Consider adding an agenda/outline slide"},
+        {"field": "require_conclusion", "tier": "lock", "expected": true, "message": "Must end with a conclusion slide"},
+        {"field": "font_size", "tier": "guide", "expected": 14, "tolerance": 0.20, "message": "Body text around 14pt"},
+        {"field": "line_spacing", "tier": "guide", "expected": 1.35, "tolerance": 0.15, "message": "Line spacing around 1.35 — tight for high-density slides"},
+        {"field": "title_size", "tier": "guide", "expected": 28, "tolerance": 0.20, "message": "Title around 28pt"}
       ]
     },
     "editorial_magazine": {
@@ -312,6 +342,16 @@
         "Oversized titles + asymmetric grid + hard-edge composition",
         "One strong visual anchor per page, deliberately low information density",
         "No rounded cards + shadows generic template feel"
+      ],
+      "deck_rules": [
+        {"field": "font_family", "tier": "lock", "expected": "Microsoft YaHei", "message": "All slides must use the same font family"},
+        {"field": "require_cover", "tier": "lock", "expected": true, "message": "Deck must start with a cover slide"},
+        {"field": "page_count", "tier": "hint", "expected": [8, 25], "message": "8-25 slides — magazine-style favors pacing over density"},
+        {"field": "require_agenda", "tier": "hint", "expected": true, "message": "Consider section dividers instead of a single agenda"},
+        {"field": "require_conclusion", "tier": "hint", "expected": true, "message": "End with a call-to-action or key takeaway slide"},
+        {"field": "font_size", "tier": "guide", "expected": 14, "tolerance": 0.30, "message": "Body text around 14pt — titles dominate, body is secondary"},
+        {"field": "line_spacing", "tier": "guide", "expected": 1.50, "tolerance": 0.25, "message": "Line spacing around 1.50 — generous for editorial feel"},
+        {"field": "title_size", "tier": "guide", "expected": 44, "tolerance": 0.25, "message": "Title around 44pt — oversized is the point"}
       ]
     },
     "creative_vibrant": {
@@ -385,6 +425,16 @@
         "Large rounded corners + heavy font weight + sticker hard shadows",
         "≤2 colors per page, rotate colors across deck",
         "Decorative geometry as corner accents only"
+      ],
+      "deck_rules": [
+        {"field": "font_family", "tier": "lock", "expected": "Microsoft YaHei", "message": "All slides must use the same font family"},
+        {"field": "require_cover", "tier": "lock", "expected": true, "message": "Deck must start with a cover slide"},
+        {"field": "page_count", "tier": "hint", "expected": [5, 15], "message": "5-15 slides — creative decks fatigue fast beyond 15"},
+        {"field": "require_agenda", "tier": "hint", "expected": false, "message": "Agenda slides kill creative momentum — skip it"},
+        {"field": "require_conclusion", "tier": "hint", "expected": true, "message": "End with a thank-you or CTA slide"},
+        {"field": "font_size", "tier": "guide", "expected": 14, "tolerance": 0.30, "message": "Body text around 14pt — creative decks allow more variation"},
+        {"field": "line_spacing", "tier": "guide", "expected": 1.45, "tolerance": 0.30, "message": "Line spacing around 1.45"},
+        {"field": "title_size", "tier": "guide", "expected": 32, "tolerance": 0.30, "message": "Title around 32pt"}
       ]
     },
     "government_solemn": {
@@ -458,6 +508,16 @@
         "Centered titles, symmetric composition",
         "Top/bottom ribbon or thin red line accent",
         "No neon, gradients, large rounded corners, or sticker shadows"
+      ],
+      "deck_rules": [
+        {"field": "font_family", "tier": "lock", "expected": "Microsoft YaHei", "message": "All slides must use the same font family"},
+        {"field": "require_cover", "tier": "lock", "expected": true, "message": "Deck must start with a cover slide with full title and organization name"},
+        {"field": "page_count", "tier": "hint", "expected": [8, 30], "message": "8-30 slides typical for official briefings"},
+        {"field": "require_agenda", "tier": "lock", "expected": true, "message": "Must include an agenda slide — official briefings require outline"},
+        {"field": "require_conclusion", "tier": "lock", "expected": true, "message": "Must end with a summary or conclusion slide"},
+        {"field": "font_size", "tier": "guide", "expected": 15, "tolerance": 0.15, "message": "Body text around 15pt — official docs favor larger body text"},
+        {"field": "line_spacing", "tier": "guide", "expected": 1.50, "tolerance": 0.15, "message": "Line spacing around 1.50 — generous for readability"},
+        {"field": "title_size", "tier": "guide", "expected": 28, "tolerance": 0.20, "message": "Title around 28pt — centered and consistent"}
       ]
     }
   },

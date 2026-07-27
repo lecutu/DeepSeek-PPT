@@ -27,7 +27,8 @@ def _estimate_height(elem, ew: float) -> float:
     # contain-fit rendering layer scales proportionally to prevent overflow
     if elem.content_type == ContentType.IMAGE:
         return 9999.0  # clamped by _place_stack() min(eh, page_h - ey) to region height
-    # Compute text demand height first
+    # Compute text demand height first — use SHAPE_TO_FIT_TEXT ceiling to prevent
+    # render-time shape expansion from bleeding past the region boundary.
     text_h = 30.0
     if payload and payload.text.strip():
         _, _, _, rh = estimate_text_size(
@@ -35,9 +36,8 @@ def _estimate_height(elem, ew: float) -> float:
             line_spacing=payload.line_spacing,
             box_width_pt=ew, box_height_pt=9999.0, word_wrap=True,
         )
-        text_h = max(rh, payload.font_size * 1.5)
+        text_h = max(rh + 12, payload.font_size * 1.5 + 12)  # +12 = padding
     # preferred_height acts as minimum, not fixed
-    # Boxes with fill need room for multi-line text; otherwise white text overflows onto light background
     if elem.preferred_height is not None:
         return max(elem.preferred_height, text_h)
     return text_h
@@ -68,15 +68,50 @@ def _commit_element(elem, ex, ey, ew, eh, plan, canvas, locked, region):
 
 def _place_stack(elems, ux, uy, uw, uh, page_w, page_h,
                  plan, canvas, locked, region):
-    cy = uy
+    # ── P0-②: pre-compute min height for every element before placement ──
+    # Without this, Phase 1 allocates height purely from the region budget
+    # and gives 1pt to the last element. Render-time SHAPE_TO_FIT_TEXT then
+    # expands the shape past neighbors and canvas. We front-load the estimate
+    # so Phase 1 KNOWS what the render layer will need.
+    demands: list[float] = []
+    has_image = False
     for elem in elems:
         ew = min(_estimate_width(elem, uw), uw)
         eh = _estimate_height(elem, ew)
+        if eh < 0:
+            eh = 24
+        if elem.content_type == ContentType.IMAGE and eh > uh:
+            has_image = True  # IMAGE sentinel: fill remaining space, not demand-driven
+        demands.append(eh)
+
+    total_demand = sum(demands)
+    # If total demand exceeds available height, scale proportionally (but never below 50%)
+    if total_demand > uh and total_demand > 0 and not has_image:
+        scale = min(uh / total_demand, 1.0)
+        demands = [max(d * scale, d * 0.5) for d in demands]
+
+    cy = uy
+    for i, elem in enumerate(elems):
+        ew = min(_estimate_width(elem, uw), uw)
+        eh = demands[i]
         ex = ux
         if ex + ew > ux + uw + 2:
             ew = max(1.0, ux + uw - ex)
         ey = max(0.0, min(cy, page_h - 1))
         h = max(1.0, min(eh, page_h - ey, uy + uh - ey))
+        # If element height is clamped by region boundary, report the shortfall
+        if h < eh - 2:
+            plan.diagnostics.append(LayoutDiagnostic(
+                kind="stack_clipped", severity="warning", elem_id=elem.elem_id,
+                demand_pt=eh, usable_pt=h,
+                over_by_pt=eh - h,
+                message=f"element needs {eh:.0f}pt, clipped to {h:.0f}pt by region bottom",
+                options=[
+                    f"expand region vertically by {eh - h:.0f}pt",
+                    f"reduce content or font size",
+                    "split content to next slide",
+                ],
+            ))
         _commit_element(elem, ex, ey, ew, h, plan, canvas, locked, region)
         cy = ey + h + elem.margin_above
 

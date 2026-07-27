@@ -1,4 +1,4 @@
-"""
+﻿"""
 ppt_reflex/builder.py — Sole AI entry point. All engine capabilities exposed here, pure interface zero engine concepts.
 
 from ppt_reflex.builder import PPTBuilder, load_style_presets, save_style_presets, list_style_presets
@@ -26,13 +26,16 @@ import os, tempfile, time, math, json
 from dataclasses import dataclass, field
 
 from ppt_reflex.grid import (
-    GridCanvas, GridConfig, ContentType, ElementPayload,
+    GridCanvas, GridConfig, ContentType, ElementPayload, Verdict,
     LayoutPlan, Region, Phase1Element, DecoIntent,
     execute_phase1, execute_phase2, global_composition_check,
 )
 from ppt_reflex.grid.templates import get_template, TemplateProfile
 from ppt_reflex.grid.aesthetics import AestheticsEngine, AestheticViolation, ElemStyle
 from ppt_reflex.grid.serializer import _render_image, _render_payload  # contain-fit rendering
+from ppt_reflex.diff_log import DiffLog  # snapshot-based mutation trace, session lifetime
+from ppt_reflex.roundtrip_check import check_overflow  # reopen saved PPTX and verify text fits
+from ppt_reflex.color_triangulator import check_slide as tri_check_slide  # bg↔text↔fill color triangle
 
 # ── Style presets path ──
 _PRESETS_PATH = os.path.join(os.path.dirname(__file__), "style_presets.json")
@@ -150,10 +153,9 @@ class PPTBuilder:
         self._slides: list[_Slide] = []
         self._id = 0
         self._template_pptx = template_pptx
-        # Fix #14: cache the style-preset font for body_font fallback
         self._style_body_font: str|None = None
-        # v2: image_layout — preset-locked image layout strategy
         self._image_layout: dict|None = None
+        self.diff_log = DiffLog()  # per-deck-session mutation trace, clear() on user confirm
 
         if style:
             data = load_style_presets()
@@ -181,6 +183,11 @@ class PPTBuilder:
                 # v2: capture image_layout from preset
                 self._image_layout = self._style_preset.get("image_layout", None)
 
+    def set_intent_scope(self, scope: dict):
+        """Agent-declared intent scope: {"slide_ids":[2,3], "elem_ids":["box_3"]}.
+        Used by DiffLog.scope_alert() to catch say-vs-do mismatch."""
+        self.diff_log.set_intent_scope(scope)
+
     # ── slide ──
     def add_slide(self, title: str = "", *, regions: list|None = None,
                   elements: list|None = None, arrows: list|None = None) -> int:
@@ -189,6 +196,66 @@ class PPTBuilder:
             regions = [("main", 60, 60, 840, 420, 1)]
         self._slides.append(_Slide(title, regions, elements or [], arrows or []))
         return len(self._slides) - 1
+
+    def build_single_slide(self, slide_idx: int, prs=None) -> dict:
+        """Build exactly one slide (for DeckPlanner harness). Returns per-slide diagnostics."""
+        if slide_idx < 0 or slide_idx >= len(self._slides):
+            return {"ok": False, "diagnostics": [{"kind": "invalid_index", "severity": "error",
+                     "message": f"slide_idx {slide_idx} out of range [0, {len(self._slides)})"}]}
+        spec = self._slides[slide_idx]
+        plan = self._plan(spec)
+        c = GridCanvas(GridConfig())
+        c.checkpoint()
+
+        self.diff_log.snap_before(plan, slide_idx)
+        diags: list[dict] = []
+
+        plan.validate(verbose=False)
+        for d in plan.diagnostics:
+            diags.append(_diag(slide_idx, "0.5", d))
+
+        execute_phase1(plan, c)
+        for d in plan.diagnostics:
+            diags.append(_diag(slide_idx, "1", d))
+
+        decos = execute_phase2(plan, c)
+        for d in decos:
+            if d.deco_type == "arrow" and d.x2:
+                c.register_decoration(d.deco_id, "arrow", d.x1, d.y1, d.x2, d.y2,
+                    line_color=d.style.get("line_color", (0x66,0x66,0x66)),
+                    line_width_pt=d.style.get("line_width_pt", 1.5),
+                    text=d.text, font_size=d.text_font_size, font_color=d.text_color)
+            for w in d.occlusion_warnings:
+                diags.append(_diag(slide_idx, "2", None, kind="arrow_occlusion",
+                                   severity="warning", deco_id=d.deco_id, message=w))
+
+        for ci in global_composition_check(plan):
+            diags.append(_diag(slide_idx, "2.5", None, kind=ci.get("category","composition"),
+                               severity=ci.get("level","info"), message=ci.get("message","")))
+
+        ae_diags = self._run_aesthetics(c, plan)
+        diags.extend(ae_diags)
+
+        pv = c.pre_commit_validation()
+        for err in pv.get("errors", []):
+            diags.append(_diag(slide_idx, "pre", None, kind="validation_error", severity="error",
+                               elem_id=err.get("owner_id",""), message=err.get("detail","")))
+        for warn in pv.get("warnings", []):
+            diags.append(_diag(slide_idx, "pre", None, kind="validation_warning", severity="warning",
+                               elem_id=warn.get("owner_id",""), message=warn.get("detail","")))
+        for adv in pv.get("advisories", []):
+            diags.append(_diag(slide_idx, "pre", None, kind="advisory", severity="info",
+                               elem_id=adv.get("owner_id",""), message=adv.get("detail","")))
+
+        if prs is not None:
+            _render_slide(prs, c, self._t, slide_index=slide_idx, total_slides=len(self._slides))
+        self.diff_log.snap_after(plan, slide_idx)
+
+        errs = [d for d in diags if d.get("severity") in ("error",)]
+        warns = [d for d in diags if d.get("severity") in ("warning","warn")]
+        return {"ok": len(errs) == 0, "diagnostics": diags,
+                "summary": f"slide {slide_idx}: {len(diags)} issues ({len(errs)} errors, {len(warns)} warnings)",
+                "roundtrip_ok": True}  # single-slide mode defers roundtrip to deck-level build()
 
     def build(self, path: str|None = None) -> dict:
         from pptx import Presentation; from pptx.util import Pt
@@ -210,6 +277,10 @@ class PPTBuilder:
 
         for i, spec in enumerate(self._slides):
             plan = self._plan(spec); c = GridCanvas(GridConfig()); c.checkpoint()
+
+            # DiffLog: snap_before (entry — net change computed vs this baseline)
+            self.diff_log.snap_before(plan, i)
+
             diags: list[dict] = []
 
             # Phase 0.5: region boundary validation
@@ -242,6 +313,29 @@ class PPTBuilder:
             ae_diags = self._run_aesthetics(c, plan)
             diags.extend(ae_diags)
 
+            # Color triangle: bg ↔ text ↔ fill constraint system (Phase 3.0)
+            tri_elems = []
+            for pe in plan.elements:
+                p = pe.payload
+                if not p or not p.text.strip():
+                    continue
+                fc = p.font_color if p else (0xFF, 0xFF, 0xFF)
+                fill = p.fill_color  # None → transparent
+                tri_elems.append({
+                    "elem_id": pe.elem_id,
+                    "font_size": p.font_size if p else 14,
+                    "font_bold": p.font_bold if p else False,
+                    "font_color_rgb": fc,
+                    "fill_color_rgb": fill,
+                })
+            tri_issues = tri_check_slide(tri_elems, self._t)
+            for ti in tri_issues:
+                diags.append({
+                    "slide": i, "phase": "3.0", "kind": f"tri_{ti.edge.replace('↔','_')}",
+                    "severity": ti.level, "elem_id": ti.elem_id,
+                    "message": ti.message,
+                })
+
             # Fix #9: pre_commit_validation — bounds/overflow/role conflicts
             pv = c.pre_commit_validation()
             for err in pv.get("errors", []):
@@ -256,16 +350,41 @@ class PPTBuilder:
 
             # Fix #2: Render with smart layout selection
             _render_slide(prs, c, self._t, slide_index=i, total_slides=total_slides)
+
+            # DiffLog: snap_after (exit — diff sees only net change, engine loop noise folded away)
+            self.diff_log.snap_after(plan, i)
+
             all_diags.extend(diags)
 
         prs.save(path)
         errs = [d for d in all_diags if d.get("severity") in ("error",)]
         warns = [d for d in all_diags if d.get("severity") in ("warning","warn")]
-        return {"path": path, "ok": len(errs) == 0, "diagnostics": all_diags,
-                "summary": f"{len(all_diags)} issues ({len(errs)} errors, {len(warns)} warnings)",
-                "template": self._t.id, "style": self._style_id}
 
-    # ── Element factory ──
+        # Post-render roundtrip: reopen saved PPTX and verify every text box fits
+        rt_results = check_overflow(path)
+        for rt in rt_results:
+            all_diags.append(_diag(rt["slide"], "rt", None,
+                                   kind=rt["kind"], severity=rt["severity"],
+                                   message=rt["message"]))
+        rt_errors = [rt for rt in rt_results if rt["severity"] == "error"]
+        rt_warns = [rt for rt in rt_results if rt["severity"] == "warning"]
+
+        diff_report = self.diff_log.diff()
+        scope = self.diff_log.scope_alert()
+        return {"path": path, "ok": len(errs) == 0 and len(rt_errors) == 0,
+                "diagnostics": all_diags,
+                "summary": f"{len(all_diags)} issues ({len(errs)} errors, {len(warns)} warnings, "
+                           f"{len(rt_errors)} roundtrip errors, {len(rt_warns)} roundtrip warnings)",
+                "template": self._t.id, "style": self._style_id,
+                "diff": {
+                    "entries": len(diff_report.entries) if diff_report else 0,
+                    "changed_elem_ids": list(diff_report.changed_elem_ids) if diff_report else [],
+                },
+                "scope_alert": scope}
+
+    def clear_diff_log(self):
+        """User confirmed deck is done — wipe mutation trace."""
+        self.diff_log.clear()
     def title(self, text: str, region: str = "main") -> _Spec:
         return self._s("Heading", text, region, "text", ph=40)
     def subtitle(self, text: str, region: str = "main") -> _Spec:
@@ -301,11 +420,17 @@ class PPTBuilder:
               margin_pt: float = 8.0, text_font_size: float = 10.0,
               text_color: tuple = (0x55,0x55,0x55),
               occlusion_check: bool = True) -> _Arrow:
-        # Fix #8: expose all DecoIntent params
-        return _Arrow(self._nid("arrow"), frm, to, text, direction, color, width,
+        # Allow passing _Spec objects directly — resolve to elem_id
+        from_eid = frm.elem_id if hasattr(frm, 'elem_id') else frm
+        to_eid = to.elem_id if hasattr(to, 'elem_id') else to
+        return _Arrow(self._nid("arrow"), from_eid, to_eid, text, direction, color, width,
                       margin_pt, text_font_size, text_color, occlusion_check)
     def divider(self, region: str = "main", color: tuple|None = None, width_pt: float = 3.0) -> _Spec:
-        c = color or tuple(int(self._t.divider_color_hex.lstrip("#")[i:i+2],16) for i in (0,2,4))
+        dh = self._t.divider_color_hex
+        if dh:
+            c = color or tuple(int(dh.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
+        else:
+            c = color or (0x44, 0x44, 0x55)
         return _Spec(elem_id=self._nid("div"), style="", text="", region=region,
                      ctype="shape", fill_color=c, shape_id="rectangle", ph=width_pt)
 
@@ -321,7 +446,10 @@ class PPTBuilder:
             img = Image.open(image_path)
             w, h = img.size
             aspect = w / h if h > 0 else 1.0
-        except Exception:
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[PPTBuilder] auto_layout_mode PIL error for {image_path}: {e}")
             return "center_float"
 
         # Decide by aspect ratio
@@ -371,9 +499,9 @@ class PPTBuilder:
                      shape_id=shape_id, ph=ph, margin=4.0,
                      align_h=align_h, allow_shrink=allow_shrink, allow_wrap=allow_wrap)
 
-    # Fix #1: resolve style colors from template profile
+    # Fix #1: resolve style colors + font sizes from template profile
     def _resolve_style(self, style_name: str, fill_color=None) -> dict:
-        """Merge STYLE defaults with template/style-preset colors."""
+        """Merge STYLE defaults with template/style-preset colors AND font sizes."""
         s = dict(STYLE.get(style_name, STYLE["Body"]))
         t = self._t
 
@@ -390,6 +518,18 @@ class PPTBuilder:
             s["font_color"] = _hex_to_rgb(t.dim_hex) if t.dim_hex else _hex_to_rgb(t.gray_hex)
         else:  # "Body", "ListItem"
             s["font_color"] = _hex_to_rgb(t.text_hex)
+
+        # Map style -> template font size (was dead code — STYLE dict always won)
+        if style_name in ("Heading",):
+            s["font_size"] = t.title_size
+        elif style_name in ("Subtitle",):
+            s["font_size"] = t.caption_size
+        elif style_name in ("Body", "ListItem", "Emphasis"):
+            s["font_size"] = t.body_size
+        elif style_name == "Caption":
+            s["font_size"] = t.caption_size
+        elif style_name == "Footer":
+            s["font_size"] = t.page_number_size
 
         # Fix #13: font_name fallback
         if "font_name" not in s or not s["font_name"]:
@@ -438,7 +578,7 @@ class PPTBuilder:
                 alignment=s.get("alignment", "LEFT"),
                 fill_color=e.fill_color or s.get("fill_color"),
                 shape_id=e.shape_id,
-                line_spacing=1.2,
+                line_spacing=self._t.line_spacing,
                 image_path=e.image_path,
                 fit_mode=e.fit_mode,
                 allow_upscale=e.allow_upscale,
@@ -487,7 +627,7 @@ class PPTBuilder:
         elems = []
         for pe in plan.elements:
             p = pe.payload
-            fill_hex = _rgb_to_hex(p.fill_color) if p and p.fill_color else "FFFFFF"
+            fill_hex = _rgb_to_hex(p.fill_color) if p and p.fill_color else self._t.bg_hex.lstrip("#")
             font_hex = _rgb_to_hex(p.font_color) if p and p.font_color else "000000"
             es = ElemStyle(
                 id=pe.elem_id, content_type=pe.content_type,
@@ -497,7 +637,8 @@ class PPTBuilder:
                 line_spacing=p.line_spacing if p else 1.2,
                 text=p.text if p else "",
                 x=pe.x, y=pe.y, w=pe.w, h=pe.h,
-                auto_size="NONE",
+                auto_size="SHAPE_TO_FIT_TEXT",
+                canvas_w=self.pw, canvas_h=self.ph,
             )
             # No fill -> inherit slide background (avoids false contrast errors when text over slide bg)
             if p and not p.fill_color and not p.shape_id:
@@ -532,11 +673,17 @@ def _diag(slide_idx, phase, d, kind="", severity="", deco_id="", elem_id="", mes
 
 
 def _ae_violation_to_diag(v) -> dict:
-    """Convert AestheticViolation to a flat dict."""
+    """Convert AestheticViolation to a flat dict.
+
+    Severity mapping: Verdict.BLOCK → "error", WARN → "warning", ALLOW → "info".
+    This is canonical — BLOCK means the build must fail or the agent must explain.
+    """
+    severity_map = {Verdict.BLOCK: "error", Verdict.WARN: "warning", Verdict.ALLOW: "info"}
+    sv = severity_map.get(v.verdict, v.verdict.name.lower() if hasattr(v.verdict, 'name') else str(v.verdict))
     return {
         "kind": v.rule_id,
         "category": v.category,
-        "severity": v.verdict.name.lower() if hasattr(v.verdict, 'name') else str(v.verdict),
+        "severity": sv,
         "priority": v.priority,
         "elem_id": v.element_id,
         "message": v.message,
@@ -555,20 +702,24 @@ def _render_slide(prs, canvas, template, slide_index=0, total_slides=1):
         layout_count = len(prs.slide_layouts)
         if layout_count > 0:
             layout_idx = min(slide_index, layout_count - 1)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[PPTBuilder] slide_layouts error (template PPTX): {e}")
     slide = prs.slides.add_slide(prs.slide_layouts[layout_idx])
+    # Delete all placeholder shapes from the base layout — engine adds its own shapes.
+    # Default slide layouts carry title/content placeholders that the grid engine never
+    # populates, leaving ghost empty boxes in the output.
+    shapes_to_delete = [s for s in slide.shapes if s.is_placeholder]
+    for s in shapes_to_delete:
+        sp = s._element
+        sp.getparent().remove(sp)
 
     # Background fill
-    try:
-        bg_hex = template.bg_hex
-        bg_rgb = RGBColor(int(bg_hex[0:2], 16), int(bg_hex[2:4], 16), int(bg_hex[4:6], 16))
-        background = slide.background
-        fill = background.fill
-        fill.solid()
-        fill.fore_color.rgb = bg_rgb
-    except Exception:
-        pass
+    bg_hex = template.bg_hex.lstrip("#")
+    bg_rgb = RGBColor(int(bg_hex[0:2], 16), int(bg_hex[2:4], 16), int(bg_hex[4:6], 16))
+    background = slide.background
+    fill = background.fill
+    fill.solid()
+    fill.fore_color.rgb = bg_rgb
 
     page_w_pt = canvas.config.canvas_w_pt
     page_h_pt = canvas.config.canvas_h_pt
@@ -594,8 +745,8 @@ def _render_slide(prs, canvas, template, slide_index=0, total_slides=1):
                 p = tb.text_frame.paragraphs[0]
                 run = p.add_run()
                 run.text = payload.caption
-                run.font.size = Pt(9)
-                run.font.color.rgb = RGBColor(*template.gray_hex if template.gray_hex else (0x66, 0x66, 0x66))
+                run.font.size = Pt(template.caption_size)
+                run.font.color.rgb = RGBColor(*_hex_to_rgb(template.gray_hex) if template.gray_hex else (0x66, 0x66, 0x66))
         else:
             _render_payload(slide, x, y, w, h, ct, payload,
                 {"LEFT": PP_ALIGN.LEFT, "CENTER": PP_ALIGN.CENTER, "RIGHT": PP_ALIGN.RIGHT})
@@ -613,7 +764,10 @@ def _render_slide(prs, canvas, template, slide_index=0, total_slides=1):
             if dec.get("text"):
                 tx = (dec["x1"] + dec["x2"]) / 2
                 ty = (dec["y1"] + dec["y2"]) / 2
-                label = slide.shapes.add_textbox(Pt(tx - 40), Pt(ty - 12), Pt(80), Pt(24))
+                from pptx.enum.text import MSO_AUTO_SIZE
+                label = slide.shapes.add_textbox(Pt(tx - 55), Pt(ty - 16), Pt(110), Pt(32))
+                label.text_frame.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
+                label.text_frame.word_wrap = True
                 label.text_frame.paragraphs[0].text = dec["text"]
                 label.text_frame.paragraphs[0].font.size = Pt(dec.get("font_size", 10))
                 label.text_frame.paragraphs[0].font.color.rgb = RGBColor(*dec.get("font_color", (0x55, 0x55, 0x55)))
@@ -623,5 +777,5 @@ def _render_slide(prs, canvas, template, slide_index=0, total_slides=1):
     pn = slide.shapes.add_textbox(Pt(page_w_pt - 60), Pt(page_h_pt - 28), Pt(48), Pt(20))
     pn.text_frame.paragraphs[0].text = fn
     pn.text_frame.paragraphs[0].font.size = Pt(template.page_number_size)
-    pn.text_frame.paragraphs[0].font.color.rgb = RGBColor(*_hex_to_rgb(template.dim_hex))
+    pn.text_frame.paragraphs[0].font.color.rgb = RGBColor(*_hex_to_rgb(template.dim_hex)) if template.dim_hex else RGBColor(0x88, 0x88, 0x99)
     pn.text_frame.paragraphs[0].alignment = PP_ALIGN.RIGHT

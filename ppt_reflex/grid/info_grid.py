@@ -29,13 +29,15 @@ class InformationGrid:
     # ── Cell CRUD ──
     def occupy(self, addrs: list[str], owner_id: str, content_type: ContentType,
                role: SemanticRole = SemanticRole.ENTITY,
-               source: str = "agent", locked: bool = False):
+               source: str = "agent", locked: bool = False,
+               payload = None):
         for a in addrs:
             cell = self._cells.get(a)
             z = (cell.z_order + 1) if cell else ROLE_Z_BASE.get(role, 100)
             self._cells[a] = InfoCell(
                 owner_id=owner_id, content_type=content_type,
                 role=role, z_order=z, locked=locked, source=source,
+                payload=payload,
             )
 
     # ── bbox -> cells ──
@@ -67,8 +69,38 @@ class InformationGrid:
                 result.setdefault(c.owner_id, []).append(a)
         return result
 
+
+    # ── Legacy compatibility aliases ──
+    all_occupied = occupied_by_all
+
+    def occupied_coarse(self) -> dict[str, list[str]]:
+        """Legacy: return occupied cells grouped by owner (coarse alias)."""
+        return self.occupied_by_all()
+
+    def get_cell(self, addr: str):
+        """Legacy: direct cell access."""
+        return self._cells.get(addr)
+
     def cell_type(self, owner_id: str) -> ContentType | None:
         for c in self._cells.values():
             if c.owner_id == owner_id:
                 return c.content_type
         return None
+
+    def density(self) -> float:
+        """Legacy: coarse occupancy ratio."""
+        total_coarse = self.config.coarse_cols * self.config.coarse_rows
+        if total_coarse == 0:
+            return 0.0
+        unique_owners = len(set(c.owner_id for c in self._cells.values() if c.owner_id))
+        return min(1.0, unique_owners / max(total_coarse, 1))
+
+    def _free_cells_suggestion(self, n_cells: int) -> list[str]:
+        """Return a list of free cell addresses (for free_suggestion in PlacementResult)."""
+        all_cells = []
+        for r in range(self.config.coarse_rows):
+            for c in range(self.config.coarse_cols):
+                addr = f"{chr(ord('A')+c)}{r+1}"
+                if addr not in self._cells or self._cells[addr].owner_id is None:
+                    all_cells.append(addr)
+        return all_cells[:max(n_cells, 4)]

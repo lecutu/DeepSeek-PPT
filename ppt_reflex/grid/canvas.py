@@ -39,6 +39,22 @@ class GridCanvas:
             type=kind, deco_id=deco_id, x1=x1, y1=y1, x2=x2, y2=y2, **kw,
         ))
 
+
+    def entity_table(self) -> dict:
+        """Return entity-level occupied cells. Callable for legacy test compat."""
+        return self.info_grid.occupied_by_all()
+
+    def overlay_table(self) -> dict:
+        """Legacy: return overlay-level occupied cells for test compatibility."""
+        out = {}
+        for oid, cells in self.info_grid.occupied_by_all().items():
+            for addr in cells[:1]:
+                cell = self.info_grid._cells.get(addr)
+                if cell and cell.role not in ENTITY_ROLES:
+                    out[oid] = cells
+                    break
+        return out
+
     def checkpoint(self):
         from copy import deepcopy
         self._checkpoints.append(deepcopy(self.info_grid))
@@ -123,8 +139,8 @@ class GridCanvas:
                                           new_role=role or SemanticRole.ENTITY)
 
         # ── ⑤ Commonsense proactive Advisory (even when no collision) ──
-        # ⑤a. Family-level commonsense preventive reminders
-        if fam == Family.OVERLAY:
+        # ⑤a. Family-level commonsense preventive reminders (overlay = non-entity families)
+        if fam in (Family.CONNECTOR, Family.EMPHASIS, Family.BACKDROP):
             advisories.append(Advisory(
                 kind="overlay_placement",
                 detail="Placed as overlay — verify it lands on the element it decorates.",
@@ -161,7 +177,10 @@ class GridCanvas:
 
         # ── ⑥ Semantic layer collision ──
         if conflicts:
-            return PlacementResult(verdict=Verdict.BLOCK, conflicts=conflicts, advisories=advisories)
+            free = self.info_grid._free_cells_suggestion(len(target_cells))
+            return PlacementResult(verdict=Verdict.BLOCK, conflicts=conflicts,
+                                   advisories=advisories,
+                                   free_suggestion=[free] if free else [])
 
         # ── ⑦ Result ──
         self.info_grid.occupy_bbox(x, y, w, h, element_id, content_type,
@@ -182,7 +201,7 @@ class GridCanvas:
             verdict=Verdict.BLOCK,
             conflicts=result.conflicts,
             advisories=[
-                Advisory(kind="blocked_with_advice",
+                Advisory(kind="blocked_with_advice", level="info",
                          detail=f"Blocked by {len(result.conflicts)} conflicts. "
                                 f"Consider: role reassignment | coordinate shift | split to next slide.")
             ] + (result.advisories or []),
@@ -249,12 +268,8 @@ class GridCanvas:
                         "detail": f"role={role.value}, family default={default.value}"
                     })
 
-            for deco_id, deco in self._decorations.items():
-                if deco.get("kind") == "arrow":
-                    deco_x1, deco_y1 = deco["x1"], deco["y1"]
-                    deco_x2, deco_y2 = deco["x2"], deco["y2"]
-                    deco_bbox = (min(deco_x1, deco_x2) - 12, min(deco_y1, deco_y2) - 12,
-                                 abs(deco_x2 - deco_x1) + 24, abs(deco_y2 - deco_y1) + 24)
+            for deco in self._decoration_payloads:
+                if deco.get("type") == "arrow":
                     o_bbox = _cells_union(fine_cells, self.config)
                     if o_bbox and _rects_overlap(
                         (deco_bbox[0], deco_bbox[1], deco_bbox[0] + deco_bbox[2], deco_bbox[1] + deco_bbox[3]),

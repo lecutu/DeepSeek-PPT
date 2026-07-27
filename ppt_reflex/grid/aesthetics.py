@@ -38,13 +38,18 @@ def _unique_hues(colors):
     rgbs = []
     for c in colors:
         try: rgbs.append(hex_to_rgb(c))
-        except: pass
+        except (ValueError, IndexError):
+            continue
     if not rgbs: return colors
     buckets = set()
     for r, g, b in rgbs:
         mx, mn = max(r, g, b), min(r, g, b)
         buckets.add(0 if mx == 0 else round(((mx-mn)/mx)*12))
     return {str(b) for b in buckets}
+
+def _rgb_distance_sq(a: tuple, b: tuple) -> int:
+    """Squared Euclidean distance between two RGB tuples. 0 = identical."""
+    return (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2
 
 # ═══════════════════════ TYPES ══════════════════════════════
 @dataclass
@@ -62,6 +67,7 @@ class ElemStyle:
     auto_size: str = "NONE"
     text: str = ""; x: float = 0; y: float = 0; w: float = 0; h: float = 0
     z_order: int = 0; locked: bool = False
+    canvas_w: float = 960.0; canvas_h: float = 540.0  # slide canvas for hard-bound checks
 
 # ═══════════════════════ ENGINE ═════════════════════════════
 class AestheticsEngine:
@@ -100,6 +106,12 @@ class AestheticsEngine:
         if e.font_color == e.fill_color and e.font_color not in ("FFFFFF","000000","","transparent","none"):
             v.append(self._violation("invisible_text", "color", "P0", Verdict.BLOCK, e.id,
                 f"Text=fill color ({e.font_color})"))
+        # near-match: RGB distance < 25 → effectively invisible to human eye
+        d = _rgb_distance_sq(fc, fillc)
+        if 0 < d < 625:  # 0 < d < 25^2 — similar but not exact-match
+            v.append(self._violation("text_fill_near_match", "color", "P0", Verdict.BLOCK, e.id,
+                f"Text #({e.font_color}) ≈ fill #({e.fill_color}) — RGB distance {d**0.5:.0f}, effectively invisible",
+                {"rgb_dist": round(d**0.5, 1)}))
         Lb = luminance_L(fillc); Lt = luminance_L(fc)
         # CIE L*: 0=black, 100=white
         if Lb < 40 and Lt < 40:
@@ -189,8 +201,23 @@ class AestheticsEngine:
             fixes.append("Trim text or split to next slide")
             if v: v[-1].metrics["fix_suggestions"] = fixes
         elif e.auto_size == "SHAPE_TO_FIT_TEXT":
-            v.append(self._violation("autofit_expand", "overflow", "P1", Verdict.WARN, e.id,
-                f"Box will expand {ox:.0f}x{oy:.0f}pt", {"ox": round(ox,1), "oy": round(oy,1)}))
+            # SHAPE_TO_FIT_TEXT makes shapes grow — ground truth is roundtrip_check, not pre-render estimate.
+            # Pre-render heuristics are ±15% accurate; BLOCK here causes false positives.
+            # Reserve BLOCK for NONE mode only (definite clipping without auto-grow).
+            expanded_bottom = e.y + (rh if rh > e.h else e.h)
+            canvas_bottom = getattr(e, 'canvas_h', 540.0)
+            if expanded_bottom > canvas_bottom + 30:
+                v.append(self._violation("autofit_past_canvas", "overflow", "P1", Verdict.WARN, e.id,
+                    f"SHAPE_TO_FIT_TEXT may expand past canvas (bottom={expanded_bottom:.0f}pt > {canvas_bottom:.0f}pt) — "
+                    f"verify with roundtrip_check",
+                    {"expanded_bottom": round(expanded_bottom, 0), "canvas_h": canvas_bottom}))
+            elif oy > e.h * 0.5:
+                v.append(self._violation("autofit_expand_large", "overflow", "P1", Verdict.WARN, e.id,
+                    f"SHAPE_TO_FIT_TEXT expands {oy:.0f}pt ({oy/e.h*100:.0f}% of box) — may overlap neighbor",
+                    {"ox": round(ox,1), "oy": round(oy,1), "pct": round(oy/e.h*100)}))
+            else:
+                v.append(self._violation("autofit_expand", "overflow", "P2", Verdict.WARN, e.id,
+                    f"Box will expand {ox:.0f}x{oy:.0f}pt", {"ox": round(ox,1), "oy": round(oy,1)}))
         return v
 
     # ── Spacing ──

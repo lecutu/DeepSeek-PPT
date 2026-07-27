@@ -9,7 +9,7 @@ grid/serializer.py — Grid 状态 ↔ PPT 文件（唯一碰 python-pptx 的地
 from __future__ import annotations
 import copy
 
-from .types import GridConfig, ContentType, InfoCell, ElementPayload
+from .types import GridConfig, ContentType, InfoCell, ElementPayload, SemanticRole
 from .info_grid import InformationGrid
 from .positioning import bbox_to_fine_cells
 
@@ -65,7 +65,7 @@ def ppt_to_grid(ppt_path: str, slide_index: int,
             fine_cells,
             owner_id=shape_id,
             content_type=content_type,
-            z_order=_z_order(shape),
+            role=SemanticRole.ENTITY,
             locked=is_template,
             source="template" if is_template else "human",
         )
@@ -98,7 +98,7 @@ def grid_to_ppt(grid: InformationGrid, config: GridConfig, ppt_path: str,
         "RIGHT": PP_ALIGN.RIGHT,
     }
 
-    occ = grid.all_occupied()
+    occ = grid.occupied_by_all()
     rects = phase1_rects or {}
     payloads = phase1_payloads or {}
     decos = decorations or []
@@ -452,12 +452,10 @@ def _render_payload(slide, x: float, y: float, w: float, h: float,
 
     from pptx.enum.text import MSO_AUTO_SIZE
     tf.word_wrap = True
-    # 有填充色的形状/文本框 → 形状跟随文字撑高（SHAPE_TO_FIT_TEXT）
-    # 否则文字会被固定高度截断，深色底上的白字溢出后落在浅色页面背景上几乎不可见
-    if has_fill or p.shape_id:
-        tf.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
-    else:
-        tf.auto_size = None  # no auto-shrink; overflow caught by engine pre-check
+    # Always grow to fit text — engine pre-checks produce diagnostics for overflow.
+    # Without this, text silently clips below the allocated height when estimates are off
+    # by even a few percent (CJK width factors, font metrics variance).
+    tf.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
 
     # Margins
     pad = Pt(12) if is_code else Pt(6)
@@ -469,14 +467,7 @@ def _render_payload(slide, x: float, y: float, w: float, h: float,
     # ── Text content ──
     text = p.text.strip()
     if not text:
-        # 有框无文 → 占位标记，防静默白框
-        text = "(no text)"
-        para = tf.paragraphs[0]
-        run = para.add_run()
-        run.text = text
-        run.font.size = Pt(max(8, p.font_size * 0.8))
-        run.font.color.rgb = RGBColor(0xCC, 0x33, 0x33)  # 红色警告
-        run.font.italic = True
+        # empty text box — skip silently, don't inject warning placeholder into output
         return
 
     lines = text.split("\n")
@@ -625,7 +616,7 @@ def classify_shape(shape) -> ContentType:
                 text = shape.text_frame.text.strip()
                 if text:
                     has_text = True
-        except Exception:
+        except (AttributeError, TypeError):
             pass
 
         try:
@@ -634,7 +625,7 @@ def classify_shape(shape) -> ContentType:
             # BACKGROUND/NONE → no explicit fill. SOLID/PATTERN/GRADIENT/etc → has fill.
             if ft is not None and ft not in (MSO_FILL_TYPE.BACKGROUND,):
                 has_fill = True
-        except Exception:
+        except (AttributeError, TypeError):
             pass
 
         if has_text and has_fill:

@@ -170,17 +170,22 @@ def _verdict_to_level(v: OverlapVerdict, s: Strength) -> str:
 
 @dataclass
 class Advisory:
-    """引擎主动产出的建议——一等公民，不依赖发生碰撞才存在。
+    """Engine-generated advice — proactive, exists without collision.
 
-    level:    "info"（常识记录）| "warn"（偏离先验）| "error"（违反物理事实）
-    message:  常识依据（人话）
-    suggest:  语义级修法（人话）
+    kind:       short machine-readable key (overflow_v, role_deviation, band_overlap, etc.)
+    level:      "info" (commonsense) | "warn" (prior deviation) | "error" (physics violation)
+    detail:     human-readable description
+    options:    fix suggestions (menu, AI picks)
+    family:     optional Family override
+    element_id: target element
     """
-    level: str
-    family: Family
-    element_id: str
-    message: str = ""
+    kind: str = ""
+    level: str = "info"
+    family: Family | None = None
+    element_id: str = ""
+    detail: str = ""
     suggest: str = ""
+    options: list = field(default_factory=list)
 
 
 # ═══════════════════════════════════════════════════════════
