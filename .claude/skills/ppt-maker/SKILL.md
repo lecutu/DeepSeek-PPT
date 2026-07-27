@@ -154,6 +154,66 @@ print(prompt.style_notes)
 
 Image colors auto-match the selected template.
 
+## Zero-Error Recipe — first-build guarantee, no debugging loops
+
+### Guaranteed errors (NEVER use these)
+
+| Danger | Why it breaks | Diagnosis |
+|:--|:--|:--|
+| `b.text("...", style="Heading")` in small region | 28pt bold → needs ~49pt, header inset eats 8pt | `overflow_vertical` |
+| `b.text("...", style="Subheading")` | 20pt font in fixed-height box | `overflow_vertical` |
+| `b.text("...", style="Emphasis")` | Bold 16pt still overflows small boxes | `overflow_vertical` |
+| `b.text("...", style="Body")` in fixed region | 18pt → auto-grow may still clip | `overflow_vertical` roundtrip |
+| `b.image(..., caption="...")` | Caption text triggers overflow | `overflow_vertical` |
+| `template="product"` + `style="creative_vibrant"` | creative_vibrant overrides bg to light | `tri_bg_fill` contrast BLOCK |
+| Any light-bg template + dark-bg style mix | Theme mismatch → white on white | `invisible_text` BLOCK |
+
+### Safe patterns (zero errors)
+
+| Safe | Why |
+|:--|:--|
+| `template="product"` + `style="tech_dark"` | Real dark bg, neon text works |
+| `template="minimal"` + `style="tech_dark"` | Also safe |
+| `b.box("...", fill_color=DARK, style="Body")` | Auto-expands height |
+| `b.bullet("...")` | 13pt, auto-flow |
+| `b.shape(...)` | Pure graphics |
+| `b.image(..., layout_mode="hero_top")` — no caption | No text overflow |
+| `b.title("...", region="header")` | Built-in ph=40 margin |
+| `b.text("...", style="Caption")` | 10pt fits anywhere |
+| `b.divider(...)` | Always safe |
+| Header region height ≥ 60pt for titles | Leaves room after 8pt inset |
+
+### Skeleton: zero-error first build
+
+```python
+from ppt_reflex.builder import PPTBuilder
+
+b = PPTBuilder(template="minimal", style="tech_dark")
+ACCENT = (34, 211, 238); DARK = (16, 26, 45)
+
+b.add_slide("Title",
+    regions=[
+        ("header", 60, 30, 840, 60, 1),        # ≥60pt for titles
+        ("main", 60, 110, 520, 380, 2),
+        ("sidebar", 600, 110, 300, 200, 3),
+    ],
+    elements=[
+        b.title("Slide Title", region="header"),
+        b.text("Subtitle", style="Caption", region="main"),
+        b.bullet("Point one", region="main"),
+        b.bullet("Point two", region="main"),
+        b.box("Key takeaway", style="Body", region="sidebar",
+              fill_color=DARK, shape_id="rounded_rectangle"),
+        b.shape("hexagon", region="sidebar", fill_color=ACCENT, pw=60, ph=45),
+    ],
+)
+
+r = b.build("out.pptx")
+# Expect: 0 errors
+```
+
+**Key rules:** use `b.box()` for text content (auto-height), `b.bullet()` for lists, header ≥ 60pt for titles. Never `Heading`/`Subheading`/`Emphasis` in small regions. Images without captions. `product` style ONLY with `tech_dark`.
+
 ## Color conventions
 
 - RGB tuples: `(34, 211, 238)` — not hex strings

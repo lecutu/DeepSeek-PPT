@@ -138,6 +138,69 @@ print(r["summary"])
 # Windows: os.startfile("output.pptx")
 ```
 
+## Zero-Error Recipe — use this to avoid 15-round debugging loops
+
+### Guaranteed errors (NEVER use these)
+
+| Danger | Why it breaks | What happens |
+|:--|:--|:--|
+| `b.text("...", style="Heading")` in header region | 28pt bold → needs ~49pt height, header is 50pt → overflow after inset | `overflow_vertical` error |
+| `b.text("...", style="Subheading")` in small region | 20pt font → box too small after inset | `overflow_vertical` error |
+| `b.text("...", style="Emphasis")` | same problem — bold 16pt → needs > allocated | `overflow_vertical` error |
+| `b.text("...", style="Body")` in fixed-height region | Body is 18pt, box auto-grows but may still clip | `overflow_vertical` roundtrip error |
+| `b.image(..., caption="...")` | Caption text triggers overflow check | `overflow_vertical` error |
+| `template="product"` + `style="creative_vibrant"` | creative_vibrant overrides bg to light → white text invisible | `tri_bg_fill` contrast error |
+| Combination: any light-bg template + any dark-bg style | Theme mismatch → white text on white | `invisible_text` BLOCK |
+
+### Safe patterns (zero errors, build on first try)
+
+| Safe | Why |
+|:--|:--|
+| `template="product"` + `style="tech_dark"` | Genuinely dark bg, neon text works |
+| `template="minimal"` + `style="tech_dark"` | Also safe — tech_dark respects dark intent |
+| `b.box("...", fill_color=DARK, style="Body")` | Box auto-expands height — no overflow |
+| `b.bullet("...")` | 13pt, no fixed box — auto-flow |
+| `b.shape(...)` | Pure graphics, no text → no overflow |
+| `b.image(..., layout_mode="hero_top")` | No caption → no text overflow |
+| `b.title("...", region="header")` | title() has built-in ph=40 margin |
+| `b.text("...", style="Caption")` | 10pt font fits in anything |
+| `b.divider(...)` | Always safe |
+
+### Recipe: copy-paste skeleton for zero-error first build
+
+```python
+from ppt_reflex.builder import PPTBuilder
+
+b = PPTBuilder(template="minimal", style="tech_dark")
+ACCENT = (34, 211, 238)
+WARN = (251, 113, 133)
+DARK = (16, 26, 45)
+
+b.add_slide("Title",
+    regions=[
+        ("header", 60, 30, 840, 60, 1),        # ≥60pt tall for titles
+        ("main", 60, 110, 520, 380, 2),         # big enough for bullets
+        ("sidebar", 600, 110, 300, 200, 3),
+    ],
+    elements=[
+        b.title("Your Slide Title", region="header"),                   # SAFE
+        b.text("A subtitle goes here", style="Caption", region="main"),  # SAFE
+        b.bullet("Point one", region="main"),                            # SAFE
+        b.bullet("Point two", region="main"),                            # SAFE
+        b.box("Key takeaway in a card", style="Body", region="sidebar",
+              fill_color=DARK, shape_id="rounded_rectangle"),            # SAFE — auto-height
+        b.shape("hexagon", region="sidebar", fill_color=ACCENT, pw=60, ph=45),  # SAFE
+    ],
+)
+
+r = b.build("output.pptx")
+print(r["summary"])
+errs = [d for d in r["diagnostics"] if d["severity"] == "error"]
+print(f"Errors: {len(errs)}")  # Should be 0
+```
+
+**First slide: title header ≥ 60pt height.** Then iterate: if you need text-heavy slides, use `b.box()` for content (auto-height) not `b.text(Body)` (fixed box). Never use `Heading`/`Subheading`/`Emphasis` style in small parent regions — put them in a `header` region that's at least 50-60pt tall. Use `b.image(layout_mode=..., caption="")` (empty caption = no overflow).
+
 ## DON'T
 
 - Don't read ppt_reflex/ source code — all APIs are on PPTBuilder
