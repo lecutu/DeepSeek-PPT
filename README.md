@@ -8,9 +8,11 @@
 
 **DeepSeek can't see images. This gives it the power to create perfect PowerPoints anyway.**
 
+**DeepSeek PPT** — an AI-native PPTX engine built around a constraint solver. No vision. No guessing. No praying.
+
 Every LLM is blind to its own `.pptx` output — it writes code, crosses its fingers, and hopes. Other tools solve this by making the AI guess harder. ppt_reflex doesn't guess. It runs a real constraint-solving engine, returns structured diagnostics the AI can read and act on, and guarantees visual correctness before the file is written.
 
-The key insight: it's not a one-way pipeline. It's a **closed loop**. AI declares intent → engine computes layout → engine returns per-element diagnostics → AI reads them, decides what to fix → re-enters the pipeline. The AI doesn't need to see. It needs to read. And every LLM — DeepSeek included — can read structured JSON.
+The key insight: it's not a one-way pipeline. It's a **closed loop**. AI declares intent → engine computes layout → engine returns per-element diagnostics → AI reads them, decides what to fix → re-enters the pipeline. The AI doesn't need to see. It needs to read. And every LLM — DeepSeek included — can read structured JSON. That's what makes **DeepSeek PPT** different from every other PPTX generator: the blind LLM is the primary user, not an afterthought.
 
 ## The Agent-Engine Loop
 
@@ -178,6 +180,8 @@ for d in result["diagnostics"]:
 
 ## LLM Compatibility
 
+**DeepSeek PPT** was built for DeepSeek first — but the diagnostic loop works with any LLM.
+
 | Model | Vision? | Works? | The Loop |
 |:--|:--|:--|:--|
 | **DeepSeek V4 / R2** | No | ✅ Best | Reads diagnostics → decides fix → re-enters. No vision needed. |
@@ -306,4 +310,4 @@ If `build().ok` is `true`, the file is visually correct. Guaranteed. No `.pptx` 
 
 ---
 
-MIT Licensed. Built for AI agents. Blind-proof by design.
+**DeepSeek PPT** is MIT Licensed. Built for AI agents. Blind-proof by design.
