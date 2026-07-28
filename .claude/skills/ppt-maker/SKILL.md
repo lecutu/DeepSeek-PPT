@@ -4,6 +4,19 @@
 
 Everything you need is in this doc. If something isn't here, it doesn't exist. Use the zero-error skeleton below — it builds with 0 errors on first try.
 
+## Install
+
+```bash
+pip install git+https://github.com/lecutu/DeepSeek-PPT.git
+```
+
+Or clone + editable install:
+
+```bash
+git clone https://github.com/lecutu/DeepSeek-PPT.git
+pip install -e DeepSeek-PPT
+```
+
 ## Rules
 
 ```
