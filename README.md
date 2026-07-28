@@ -116,43 +116,53 @@ result = b.build("output.pptx")
 ## Architecture
 
 ```
-PPTBuilder.add_slide()  ──  AI declares regions + elements + arrow intents
-        │
-        ▼
-┌───────────────────────────────────────────────────┐
-│              THREE-LAYER CANVAS                    │
-│  Geometric   — coordinates, clamp, containment     │
-│  Semantic    — entity vs overlay role tables       │
-│  Commonsense — WCAG contrast, overlap policy       │
-└───────────────────────────────────────────────────┘
-        │
-        ▼
-┌──────────────────────────────────────────────────────┐
-│                SIX-PHASE PIPELINE                     │
-│  Phase 0   — intent → LayoutPlan                     │
-│  Phase 0.5 — region validation                       │
-│  Phase 1   — info layer: stack/inline placement       │
-│              (sets height_is_locked/width_is_locked)  │
-│  Phase 2   — decoration: arrow routing               │
-│  Phase 2.5 — global composition: whitespace/density   │
-│       │                                               │
-│  AestheticsEngine (10+ WCAG rules + style resolution) │
-│  Color Triangle — bg↔text↔fill 3-way contrast check  │
-│  ❄ Freeze + check_overflow_2d — 2D overflow detect   │
-│       │  (vertical: rendered_h > box_h)               │
-│       │  (horizontal: longest word > box_w)           │
-│       │  (respects height_is_locked/width_is_locked)  │
-│  Pre-commit validation                                │
-│       │                                               │
-│       ▼                                               │
-│  _render_slide() → .pptx                              │
-│       │                                               │
-│       ▼                                               │
-│  Roundtrip check — reopen .pptx, verify every box     │
-│       │                                               │
-│       ▼                                               │
-│  Structured diagnostics → AI reads, decides, loops    │
-└──────────────────────────────────────────────────────┘
+                            ┌─────────────────────────────────────────────┐
+                            │              AGENT / LLM                    │
+                            │   DeepSeek · Claude · GPT · Gemini · Qwen   │
+                            │                                             │
+                            │  ① browse catalogs (list_templates, etc.)   │
+                            │  ② declare intent (add_slide, archetype)    │
+                            │  ③ read diagnostics (structured JSON)       │
+                            │  ④ decide fix → fix_slide() → rebuild()     │
+                            └──────────────┬──────────────────────────────┘
+                                           │  PPTBuilder API
+                                           ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          PPTBuilder (builder.py)                         │
+│                                                                          │
+│  templates → lazy: list_templates() browse → get_template(id) one inst   │
+│  styles   → lazy: list_style_presets() browse → _apply_style(id) one    │
+│  layouts  → 12 archetypes: zone_map auto-routes element → region         │
+│  diff     → fix_slide() + rebuild([2]) — incremental, hash-cached        │
+└──────────────┬───────────────────────────────────────────────────────────┘
+               │
+        ┌──────┴──────┐
+        ▼              ▼
+┌──────────────┐ ┌──────────────────────────────────────────┐
+│  grid/ 引擎   │ │         DIAGNOSTIC PIPELINE (9 phases)   │
+├──────────────┤ ├──────────────────────────────────────────┤
+│ types.py     │ │ 0   intent → LayoutPlan                   │
+│ canvas.py    │ │ 0.5 region validation                     │
+│ plan.py      │ │ 1   info layer: stack/inline placement    │
+│ phase1.py    │ │ 2   decoration: arrow routing             │
+│ phase2.py    │ │ 2.5 global composition (balance/density)   │
+│ composition  │ │     AestheticsEngine (WCAG contrast)       │
+│ aesthetics   │ │ 3.0 color triangle (bg↔text↔fill)         │
+│ templates    │ │ ❄   freeze → check_overflow_2d             │
+│ archetypes   │ │ rt  roundtrip — reopen pptx, verify        │
+│ serializer   │ │ pre pre-commit gate                        │
+│ text_metrics │ │                                            │
+│ color_tri    │ │         LOOP ← diagnostics ←── Agent       │
+│ orchestrator │ │              Agent decides fix             │
+│ diff_log     │ │              fix_slide → rebuild           │
+└──────────────┘ └──────────────────────────────────────────┘
+
+   THREE-LAYER CANVAS                  HARNESS
+   ● Geometric  — coordinates          ● Per-element diagnostics with fix options
+   ● Semantic   — role tables          ● Color triangle (3-way contrast)
+   ● Commonsense— WCAG, overlap        ● 2D overflow pre-estimation
+                                       ● Roundtrip verification
+                                       ● Hash-cached incremental rebuild
 ```
 
 ## The Loop in Action
@@ -258,9 +268,14 @@ b.caption_format()                # → {"prefix": "Figure N. ", "alignment": "l
 ## Install
 
 ```bash
-pip install python-pptx pillow
-git clone https://github.com/lecutu/deepseek-ppt-maker.git
-cd deepseek-ppt-maker
+pip install git+https://github.com/lecutu/DeepSeek-PPT-skill.git
+```
+
+Or clone + editable install:
+
+```bash
+git clone https://github.com/lecutu/DeepSeek-PPT-skill.git
+cd DeepSeek-PPT-skill
 pip install -e .
 ```
 
