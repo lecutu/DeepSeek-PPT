@@ -283,6 +283,10 @@ class ElementPayload:
     # ── 形状 ──
     shape_id: str = ""
 
+    # ── P1-② 表格 ──
+    table_headers: list[str] | None = None
+    table_rows: list[list[str]] | None = None
+
     # ── 连线 ──
     connector_from: str = ""
     connector_to: str = ""

@@ -1,28 +1,38 @@
 ﻿"""
 ppt_reflex/builder.py — Sole AI entry point. All engine capabilities exposed here, pure interface zero engine concepts.
 
-from ppt_reflex.builder import PPTBuilder, load_style_presets, save_style_presets, list_style_presets
+from ppt_reflex.builder import PPTBuilder, load_style_presets, save_style_presets, list_style_presets, list_archetypes, get_archetype
 
-# Basic usage
+# Basic usage (manual regions)
 builder = PPTBuilder(template="academic", style="academic_rigorous")
 builder.add_slide("Cover",
     regions=[("r1", 100,80,760,380)],
     elements=[builder.title("Title"), builder.text("Body", style="Body")],
 )
+
+# Semantic layout (auto regions + auto-routing)
+builder.add_slide("My Topic",
+    archetype="two_column",
+    elements=[
+        builder.title("Heading", region="header"),
+        builder.bullet("Left column point"),
+        builder.image("chart.png"),
+    ],
+)  # bullets → left, image → right — auto-routed via zone_map
 result = builder.build("out.pptx")
+
+# Discover available archetypes
+print(list_archetypes())  # [{id, name, description, guide}, ...]
 
 # Style preset management
 presets = load_style_presets()           # read current presets
 p = presets["academic_rigorous"]         # get one preset
 p["color_override"]["bg"] = "#FFFDF5"    # change background
 save_style_presets(presets)              # persist
-
-# list_style_presets() -> [{id, display_name, mood, theme}, ...]
-# lightweight guide for AI to pick a style without loading full presets
 """
 
 from __future__ import annotations
-import os, tempfile, time, math, json
+import os, tempfile, time, math, json, hashlib
 from dataclasses import dataclass, field
 
 from ppt_reflex.grid import (
@@ -32,6 +42,7 @@ from ppt_reflex.grid import (
 )
 from ppt_reflex.grid.templates import get_template, TemplateProfile
 from ppt_reflex.grid.aesthetics import AestheticsEngine, AestheticViolation, ElemStyle
+from ppt_reflex.grid.archetypes import get_archetype, list_archetypes, get_layout_policy, LayoutPolicy
 from ppt_reflex.grid.serializer import _render_image, _render_payload  # contain-fit rendering
 from ppt_reflex.diff_log import DiffLog  # snapshot-based mutation trace, session lifetime
 from ppt_reflex.roundtrip_check import check_overflow  # reopen saved PPTX and verify text fits
@@ -104,6 +115,13 @@ SHAPES = {
     "plaque": "PLAQUE", "sun": "SUN",
 }
 
+# ── P0-①: diagnostic aggregation constants ──
+_PHASE_ORDER = ["0.5", "1", "2", "2.5", "aesthetics", "3.0", "freeze", "pre", "rt"]
+_KIND_BATCH_THRESHOLD = 5   # collapse when >=5 warnings share same kind
+_WARN_CAP = 15              # max warnings in aggregated output
+_INFO_CAP = 5               # max info diagnostics in aggregated output
+
+
 # ── Internal spec ──
 @dataclass
 class _Spec:
@@ -121,6 +139,9 @@ class _Spec:
     allow_shrink: bool = False
     allow_wrap: bool = False
     arrow_slot: float = 48.0
+    # P1-② table data — passed through _Spec → Phase1Element → render
+    table_headers: list[str] = field(default_factory=list)
+    table_rows: list[list[str]] = field(default_factory=list)
 
 @dataclass
 class _Arrow:
@@ -138,6 +159,7 @@ class _Slide:
     regions: list = field(default_factory=list)
     elements: list[_Spec] = field(default_factory=list)
     arrows: list[_Arrow] = field(default_factory=list)
+    archetype_id: str = ""  # resolved archetype id for this slide (empty = manual)
 
 
 class PPTBuilder:
@@ -155,7 +177,10 @@ class PPTBuilder:
         self._template_pptx = template_pptx
         self._style_body_font: str|None = None
         self._image_layout: dict|None = None
+        self._layout_policy: LayoutPolicy = get_layout_policy(template)
         self.diff_log = DiffLog()  # per-deck-session mutation trace, clear() on user confirm
+        # P1-①: incremental rebuild cache — slide_idx → (slide_hash, plan, canvas, diags)
+        self._pipeline_cache: dict[int, tuple] = {}
 
         if style:
             data = load_style_presets()
@@ -189,13 +214,134 @@ class PPTBuilder:
         self.diff_log.set_intent_scope(scope)
 
     # ── slide ──
-    def add_slide(self, title: str = "", *, regions: list|None = None,
+    def add_slide(self, title: str = "", *, archetype: str|None = None,
+                  regions: list|None = None,
                   elements: list|None = None, arrows: list|None = None) -> int:
-        # Fix #5: regions can now have optional 6th field for content_inset
-        if regions is None:
-            regions = [("main", 60, 60, 840, 420, 1)]
-        self._slides.append(_Slide(title, regions, elements or [], arrows or []))
+        """Add a slide. If archetype is given, auto-resolve regions + auto-route elements via zone_map.
+
+        Manual regions override archetype. Auto-routing only applies to elements without explicit region.
+        """
+        arch = None
+        resolved_regions = regions
+
+        if archetype:
+            try:
+                arch = get_archetype(archetype)
+            except KeyError:
+                # Unknown archetype — fall through to manual mode
+                pass
+
+        if arch and resolved_regions is None:
+            # Apply LayoutPolicy insets to archetype regions
+            inset = getattr(self._layout_policy, 'content_inset', 12)
+            resolved_regions = []
+            for r in arch.regions:
+                name, x, y, w, h, z = r
+                # Apply inset: shrink region by content_inset on all sides
+                resolved_regions.append(
+                    (name, x + inset, y + inset, w - 2*inset, h - 2*inset, z)
+                )
+
+        if resolved_regions is None:
+            resolved_regions = [("main", 60, 60, 840, 420, 1)]
+
+        # Auto-route elements via archetype zone_map
+        routed_elements = []
+        if arch and arch.zone_map and elements:
+            for e in elements:
+                if e.region and e.region != "main":
+                    routed_elements.append(e)  # explicit region — skip auto-route
+                    continue
+                # Determine element type from _Spec fields
+                etype = self._elem_type(e)
+                target_zone = arch.zone_map.get(etype)
+                if target_zone:
+                    # Check if zone exists in resolved regions
+                    zone_names = [r[0] for r in resolved_regions]
+                    if target_zone in zone_names:
+                        e.region = target_zone
+                routed_elements.append(e)
+        elif elements:
+            routed_elements = list(elements)
+
+        self._slides.append(_Slide(title, resolved_regions, routed_elements, arrows or [],
+                                   archetype_id=arch.id if arch else ""))
+        self._pipeline_cache.pop(len(self._slides) - 1, None)  # invalidate new slide slot
         return len(self._slides) - 1
+
+    @staticmethod
+    def _elem_type(e: _Spec) -> str:
+        """Map _Spec → zone_map key. Uses ctype + style for accurate routing.
+
+        Priority: ctype (deterministic) > style (hint). b.title()/bullet()/etc.
+        all return ctype="text" — their style distinguishes them."""
+        # ctype-first: these are unambiguous
+        if e.ctype == "textbox":   return "box"
+        if e.ctype == "shape":     return "shape"
+        if e.ctype == "image":     return "image"
+        if e.ctype == "table":     return "table"
+        if e.ctype == "footer":    return "footer"
+
+        # ctype="text" + style disambiguation
+        if e.style == "Heading":   return "title"
+        if e.style == "Subtitle":  return "subtitle"
+        if e.style == "ListItem":  return "bullet"
+        if e.style == "Caption":   return "text"
+        # "Body"/"Emphasis"/"Subheading" → treated as generic text
+        return "text"
+
+    def fix_slide(self, slide_idx: int, title: str|None = None, *,
+                  archetype: str|None = None,
+                  regions: list|None = None,
+                  elements: list|None = None,
+                  arrows: list|None = None) -> int:
+        """P1-①: modify an existing slide in-place. Returns slide_idx on success, -1 on bad index.
+
+        Only the passed keyword arguments are changed — omitted args keep current values.
+        If archetype is passed, auto-resolves regions + auto-routes elements (like add_slide)."""
+        if slide_idx < 0 or slide_idx >= len(self._slides):
+            return -1
+        s = self._slides[slide_idx]
+        if title is not None:
+            s.title = title
+        if archetype is not None:
+            arch = get_archetype(archetype)
+            s.archetype_id = arch.id
+            s.regions = [(r[0], r[1], r[2], r[3], r[4],
+                          r[5] if len(r) > 5 else slide_idx + 1)
+                         for r in arch.regions]
+            if elements is not None:
+                for e in elements:
+                    if e.region and e.region != "main":
+                        continue
+                    etype = PPTBuilder._elem_type(e)
+                    target = arch.zone_map.get(etype)
+                    if target and target in [r[0] for r in s.regions]:
+                        e.region = target
+        if regions is not None:
+            s.regions = [(r[0], r[1], r[2], r[3], r[4],
+                          r[5] if len(r) > 5 else slide_idx + 1)
+                         for r in regions]
+        if elements is not None:
+            s.elements = elements
+        if arrows is not None:
+            s.arrows = arrows
+        self._pipeline_cache.pop(slide_idx, None)
+        return slide_idx
+
+    def _spec_hash(self, spec: _Slide) -> str:
+        """P1-①: structural fingerprint — same content → same hash, regardless of elem_id."""
+        data = {"title": spec.title, "regions": spec.regions, "n_arrows": len(spec.arrows)}
+        els = []
+        for e in spec.elements:
+            d = {"ctype": e.ctype, "text": e.text, "style": e.style, "region": e.region,
+                 "pw": e.pw, "ph": e.ph, "fill_color": e.fill_color, "shape_id": e.shape_id,
+                 "image_path": e.image_path, "layout_mode": e.layout_mode,
+                 "table_headers": e.table_headers, "table_rows_len": len(e.table_rows) if e.table_rows else 0,
+                 "align_h": e.align_h, "fill_mode": e.fill_mode}
+            els.append(d)
+        data["elements"] = els
+        return hashlib.md5(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
 
     def build_single_slide(self, slide_idx: int, prs=None) -> dict:
         """Build exactly one slide (for DeckPlanner harness). Returns per-slide diagnostics."""
@@ -326,12 +472,14 @@ class PPTBuilder:
             yield {**slide_result, "type": "slide", "slide": i, "slide_total": total_slides}
 
         prs.save(path)
-        errs = [d for d in all_diags if d.get("severity") in ("error",)]
-        warns = [d for d in all_diags if d.get("severity") in ("warning","warn")]
+
+        # P0-①: aggregate noisy diagnostics before returning
+        aggregated_diags, agg_stats = _aggregate_diagnostics(all_diags)
+        errs = [d for d in aggregated_diags if d.get("severity") in ("error",)]
 
         rt_results = check_overflow(path)
         for rt in rt_results:
-            all_diags.append(_diag(rt["slide"], "rt", None,
+            aggregated_diags.append(_diag(rt["slide"], "rt", None,
                                    kind=rt["kind"], severity=rt["severity"],
                                    message=rt["message"]))
         rt_errors = [rt for rt in rt_results if rt["severity"] == "error"]
@@ -342,9 +490,17 @@ class PPTBuilder:
         yield {
             "type": "summary",
             "path": path, "ok": len(errs) == 0 and len(rt_errors) == 0,
-            "diagnostics": all_diags,
-            "summary": f"{len(all_diags)} issues ({len(errs)} errors, {len(warns)} warnings, "
-                       f"{len(rt_errors)} roundtrip errors, {len(rt_warns)} roundtrip warnings)",
+            "diagnostics": aggregated_diags,
+            "raw_diagnostic_count": agg_stats["raw_count"],
+            "collapsed": {"dedup": agg_stats["dedup"],
+                          "batch": agg_stats["batch"],
+                          "trimmed_warnings": agg_stats["trimmed_warnings"],
+                          "trimmed_info": agg_stats["trimmed_info"]},
+            "summary": f"{agg_stats['final_count']} issues ({agg_stats['errors']} errors, "
+                       f"{agg_stats['warnings']} warnings) — "
+                       f"({agg_stats['raw_count']} raw, "
+                       f"-{agg_stats['dedup']} dedup, "
+                       f"{agg_stats['batch']} batch-collapsed)",
             "template": self._t.id, "style": self._style_id,
             "diff": {
                 "entries": len(diff_report.entries) if diff_report else 0,
@@ -499,10 +655,24 @@ class PPTBuilder:
 
         diff_report = self.diff_log.diff()
         scope = self.diff_log.scope_alert()
+
+        # P0-①: aggregate noisy diagnostics before returning
+        aggregated_diags, agg_stats = _aggregate_diagnostics(all_diags)
+        errs = [d for d in aggregated_diags if d.get("severity") in ("error",)]
+
         return {"path": path, "ok": len(errs) == 0 and len(rt_errors) == 0,
-                "diagnostics": all_diags,
-                "summary": f"{len(all_diags)} issues ({len(errs)} errors, {len(warns)} warnings, "
-                           f"{len(rt_errors)} roundtrip errors, {len(rt_warns)} roundtrip warnings)",
+                "diagnostics": aggregated_diags,
+                "raw_diagnostic_count": agg_stats["raw_count"],
+                "collapsed": {"dedup": agg_stats["dedup"],
+                              "batch": agg_stats["batch"],
+                              "trimmed_warnings": agg_stats["trimmed_warnings"],
+                              "trimmed_info": agg_stats["trimmed_info"]},
+                "summary": f"{agg_stats['final_count']} issues ({agg_stats['errors']} errors, "
+                           f"{agg_stats['warnings']} warnings) — "
+                           f"({agg_stats['raw_count']} raw, "
+                           f"-{agg_stats['dedup']} dedup, "
+                           f"{agg_stats['batch']} batch-collapsed, "
+                           f"-{agg_stats['trimmed_warnings']} warn / -{agg_stats['trimmed_info']} info trimmed)",
                 "template": self._t.id, "style": self._style_id,
                 "diff": {
                     "entries": len(diff_report.entries) if diff_report else 0,
@@ -513,6 +683,190 @@ class PPTBuilder:
     def clear_diff_log(self):
         """User confirmed deck is done — wipe mutation trace."""
         self.diff_log.clear()
+
+    # ── P1-①: incremental rebuild ──
+
+    def rebuild(self, changed_slides: list[int], path: str|None = None) -> dict:
+        """Only re-run pipeline for the given slide indices; others reuse pipelined plan+canvas.
+
+        Call this after fix_slide() — much faster than build() for 1-2 slide edits.
+        Uses _pipeline_cache which stores (hash, LayoutPlan, GridCanvas, diags) per slide.
+        """
+        from pptx import Presentation
+        from pptx.util import Pt
+
+        if path is None:
+            ts = int(time.time())
+            path = os.path.join(tempfile.gettempdir(), f"ppt_reflex_{ts}.pptx")
+
+        changed: set[int] = set(changed_slides)
+        total_slides = len(self._slides)
+        all_diags: list[dict] = []
+
+        if self._template_pptx and os.path.exists(self._template_pptx):
+            prs = Presentation(self._template_pptx)
+            while len(prs.slides) > 0:
+                rId = prs.slides._sldIdLst[0].get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id')
+                prs.part.drop_rel(rId)
+                prs.slides._sldIdLst.remove(prs.slides._sldIdLst[0])
+        else:
+            prs = Presentation()
+        prs.slide_width = Pt(self.pw)
+        prs.slide_height = Pt(self.ph)
+
+        for i, spec in enumerate(self._slides):
+            h = self._spec_hash(spec)
+
+            if i not in changed:
+                cached_h, cached_plan, cached_canvas, cached_diags = self._pipeline_cache.get(i, (None, None, None, None))
+                if cached_h == h and cached_plan is not None and cached_canvas is not None:
+                    # Cache hit: reuse pipeline results, just re-render
+                    _render_slide(prs, cached_canvas, self._t, slide_index=i, total_slides=total_slides)
+                    all_diags.extend(cached_diags or [])
+                    # Update cache with fresh slide XML
+                    self._pipeline_cache[i] = (h, cached_plan, cached_canvas, cached_diags)
+                    continue
+
+            # Cache miss or changed slide → run full pipeline
+            plan = self._plan(spec)
+            c = GridCanvas(GridConfig())
+            c.checkpoint()
+            self.diff_log.snap_before(plan, i)
+
+            diags: list[dict] = []
+
+            plan.validate(verbose=False)
+            for d in plan.diagnostics:
+                diags.append(_diag(i, "0.5", d))
+
+            execute_phase1(plan, c)
+            for d in plan.diagnostics:
+                diags.append(_diag(i, "1", d))
+
+            decos = execute_phase2(plan, c)
+            for d in decos:
+                if d.deco_type == "arrow" and d.x2:
+                    c.register_decoration(d.deco_id, "arrow", d.x1, d.y1, d.x2, d.y2,
+                        line_color=d.style.get("line_color", (0x66, 0x66, 0x66)),
+                        line_width_pt=d.style.get("line_width_pt", 1.5),
+                        text=d.text, font_size=d.text_font_size, font_color=d.text_color)
+                for w in d.occlusion_warnings:
+                    diags.append(_diag(i, "2", None, kind="arrow_occlusion", severity="warning",
+                                       deco_id=d.deco_id, message=w))
+
+            for ci in global_composition_check(plan):
+                diags.append(_diag(i, "2.5", None, kind=ci.get("category", "composition"),
+                                   severity=ci.get("level", "info"), message=ci.get("message", "")))
+
+            ae_diags = self._run_aesthetics(c, plan)
+            diags.extend(ae_diags)
+
+            tri_elems = []
+            for pe in plan.elements:
+                p = pe.payload
+                if not p or not p.text.strip():
+                    continue
+                fc = p.font_color if p else (0xFF, 0xFF, 0xFF)
+                fill = p.fill_color
+                tri_elems.append({
+                    "elem_id": pe.elem_id,
+                    "font_size": p.font_size if p else 14,
+                    "font_bold": p.font_bold if p else False,
+                    "font_color_rgb": fc,
+                    "fill_color_rgb": fill,
+                })
+            tri_issues = tri_check_slide(tri_elems, self._t)
+            for ti in tri_issues:
+                diags.append({
+                    "slide": i, "phase": "3.0", "kind": f"tri_{ti.edge.replace('↔', '_')}",
+                    "severity": ti.level, "elem_id": ti.elem_id,
+                    "message": ti.message,
+                })
+
+            from ppt_reflex.grid.text_metrics import check_overflow_2d
+            for pe in plan.elements:
+                p = pe.payload
+                if not p or not p.text.strip():
+                    continue
+                if pe.content_type not in (ContentType.TEXT, ContentType.TEXTBOX):
+                    continue
+                v_auto_fit = not pe.height_is_locked
+                h_auto_fit = not pe.width_is_locked
+                issues = check_overflow_2d(
+                    p.text, p.font_size,
+                    box_w=pe.w, box_h=pe.h,
+                    line_spacing=p.line_spacing,
+                    v_auto_fit=v_auto_fit,
+                    h_auto_fit=h_auto_fit,
+                )
+                for iss in issues:
+                    severity = "warning" if pe.content_type == ContentType.TEXTBOX else iss["level"]
+                    diags.append({
+                        "slide": i, "phase": "freeze",
+                        "kind": iss["kind"],
+                        "severity": severity,
+                        "elem_id": pe.elem_id,
+                        "message": iss["message"],
+                    })
+
+            pv = c.pre_commit_validation()
+            for err in pv.get("errors", []):
+                diags.append(_diag(i, "pre", None, kind="validation_error", severity="error",
+                                   elem_id=err.get("owner_id", ""), message=err.get("detail", "")))
+            for warn in pv.get("warnings", []):
+                diags.append(_diag(i, "pre", None, kind="validation_warning", severity="warning",
+                                   elem_id=warn.get("owner_id", ""), message=warn.get("detail", "")))
+            for adv in pv.get("advisories", []):
+                diags.append(_diag(i, "pre", None, kind="advisory", severity="info",
+                                   elem_id=adv.get("owner_id", ""), message=adv.get("detail", "")))
+
+            _render_slide(prs, c, self._t, slide_index=i, total_slides=total_slides)
+            self.diff_log.snap_after(plan, i)
+
+            # Cache pipeline results
+            self._pipeline_cache[i] = (h, plan, c, diags)
+            all_diags.extend(diags)
+
+        prs.save(path)
+        rt_results = check_overflow(path)
+        for rt in rt_results:
+            all_diags.append(_diag(rt["slide"], "rt", None,
+                                   kind=rt["kind"], severity=rt["severity"],
+                                   message=rt["message"]))
+        rt_errors = [rt for rt in rt_results if rt["severity"] == "error"]
+
+        diff_report = self.diff_log.diff()
+        scope = self.diff_log.scope_alert()
+
+        aggregated_diags, agg_stats = _aggregate_diagnostics(all_diags)
+        errs = [d for d in aggregated_diags if d.get("severity") in ("error",)]
+
+        return {
+            "path": path,
+            "ok": len(errs) == 0 and len(rt_errors) == 0,
+            "diagnostics": aggregated_diags,
+            "raw_diagnostic_count": agg_stats["raw_count"],
+            "collapsed": {"dedup": agg_stats["dedup"],
+                          "batch": agg_stats["batch"],
+                          "trimmed_warnings": agg_stats["trimmed_warnings"],
+                          "trimmed_info": agg_stats["trimmed_info"]},
+            "summary": f"{agg_stats['final_count']} issues ({agg_stats['errors']} errors) — "
+                       f"{len(changed)} slides rebuilt, "
+                       f"{total_slides - len(changed)} from cache",
+            "template": self._t.id,
+            "style": self._style_id,
+            "diff": {
+                "entries": len(diff_report.entries) if diff_report else 0,
+                "changed_elem_ids": list(diff_report.changed_elem_ids) if diff_report else [],
+            },
+            "scope_alert": scope,
+        }
+
+    def clear_cache(self):
+        """Drop incremental rebuild cache (e.g. after template switch)."""
+        self._pipeline_cache.clear()
+
+
     def title(self, text: str, region: str = "main") -> _Spec:
         return self._s("Heading", text, region, "text", ph=40)
     def subtitle(self, text: str, region: str = "main") -> _Spec:
@@ -543,6 +897,17 @@ class PPTBuilder:
                      ctype="image", pw=pw, ph=ph, image_path=path,
                      fit_mode=fit_mode, allow_upscale=allow_upscale,
                      layout_mode=layout_mode, caption=caption)
+    def table(self, headers: list[str], rows: list[list[str]],
+              region: str = "main", font_size: float = 12.0,
+              header_bg: tuple|None = None) -> _Spec:
+        """Add a table element. headers=column names, rows=row data.
+
+        Each row must have len(headers) cells. The engine auto-sizes columns
+        to fit region width and auto-sizes rows by content.
+        """
+        return _Spec(elem_id=self._nid("tbl"), style="Table", text="", region=region,
+                     ctype="table", ph=None,
+                     table_headers=list(headers), table_rows=[list(r) for r in rows])
     def arrow(self, frm: str, to: str, text: str = "", direction: str = "below",
               color: tuple = (0x66,0x66,0x66), width: float = 1.5,
               margin_pt: float = 8.0, text_font_size: float = 10.0,
@@ -672,6 +1037,7 @@ class PPTBuilder:
     def _plan(self, spec: _Slide) -> LayoutPlan:
         ctmap = {"text": ContentType.TEXT, "textbox": ContentType.TEXTBOX,
                  "shape": ContentType.SHAPE, "image": ContentType.IMAGE,
+                 "table": ContentType.TABLE,
                  "annotation": ContentType.ANNOTATION, "footer": ContentType.FOOTER}
         regions = []
         for ri, d in enumerate(spec.regions):
@@ -712,6 +1078,8 @@ class PPTBuilder:
                 allow_upscale=e.allow_upscale,
                 layout_mode=e.layout_mode,
                 caption=e.caption,
+                table_headers=e.table_headers if e.table_headers else None,
+                table_rows=e.table_rows if e.table_rows else None,
             )
             # Fix #6: expose Phase1Element params
             elems.append(Phase1Element(
@@ -777,6 +1145,105 @@ class PPTBuilder:
 
         violations = engine.check(elems, timing="audit")
         return [_ae_violation_to_diag(v) for v in violations]
+
+
+def _aggregate_diagnostics(diags: list[dict]) -> tuple[list[dict], dict]:
+    """P0-①: collapse noisy diagnostics into a clean actionable feed.
+
+    Rules (priority order):
+      1. ALL errors pass through untouched — never deduped, batched, or trimmed.
+      2. Dedup warnings: same (elem_id, kind) → keep latest phase only.
+      3. Batch-collapse: >=5 warnings of same kind → one summary with elem_ids list.
+      4. Cap warnings at 15, info at 5. Surplus tracked in `trimmed_*` keys.
+
+    Returns (aggregated, stats) — caller MUST use aggregated as the final diagnostics list.
+    """
+    if not diags:
+        return [], {"raw_count": 0, "errors": 0, "warnings": 0, "info": 0,
+                    "dedup": 0, "batch": 0, "trimmed_warnings": 0, "trimmed_info": 0}
+
+    errors = [d for d in diags if d.get("severity") in ("error",)]
+    warns  = [d for d in diags if d.get("severity") in ("warning", "warn")]
+    infos  = [d for d in diags if d.get("severity") == "info"]
+
+    raw_counts = {"raw_count": len(diags), "errors": len(errors),
+                  "warnings": len(warns), "info": len(infos)}
+
+    # ── Rule 2: dedup warnings by (elem_id, kind), keep latest phase ──
+    seen: dict[tuple, dict] = {}
+    dedup_count = 0
+    for w in warns:
+        eid = w.get("elem_id", "") or ""
+        kind = w.get("kind", "")
+        key = (eid, kind)
+        if key in seen:
+            dedup_count += 1
+            # Keep the one from the later phase
+            existing_phase = seen[key].get("phase", "0")
+            current_phase = w.get("phase", "0")
+            if _phase_rank(current_phase) >= _phase_rank(existing_phase):
+                seen[key] = w
+        else:
+            seen[key] = w
+    warns = list(seen.values())
+
+    # ── Rule 3: batch-collapse same-kind warnings (≥ threshold) ──
+    by_kind: dict[str, list[dict]] = {}
+    for w in warns:
+        by_kind.setdefault(w.get("kind", "unknown"), []).append(w)
+
+    batched = 0
+    result_warns: list[dict] = []
+    for kind, items in by_kind.items():
+        if len(items) >= _KIND_BATCH_THRESHOLD:
+            batched += 1
+            elem_ids = sorted(set(
+                i.get("elem_id", "") for i in items if i.get("elem_id")
+            ))
+            sample = items[0]
+            result_warns.append({
+                "kind": f"{kind}_batch",
+                "severity": "warning",
+                "phase": "aggregate",
+                "batch_kind": kind,
+                "count": len(items),
+                "elem_ids": elem_ids,
+                "sample_message": sample.get("message", ""),
+                "options": sample.get("options", []),
+                "message": (
+                    f"{len(items)} elements share '{kind}' — "
+                    f"affected: {', '.join(elem_ids[:6])}"
+                    f"{'...' if len(elem_ids) > 6 else ''}"
+                ),
+            })
+        else:
+            result_warns.extend(items)
+
+    # ── Rule 4: cap warnings and info ──
+    trimmed_w = max(0, len(result_warns) - _WARN_CAP)
+    result_warns = result_warns[:_WARN_CAP]
+
+    trimmed_i = max(0, len(infos) - _INFO_CAP)
+    result_infos = infos[:_INFO_CAP]
+
+    aggregated = errors + result_warns + result_infos
+    stats = {
+        **raw_counts,
+        "dedup": dedup_count,
+        "batch": batched,
+        "trimmed_warnings": trimmed_w,
+        "trimmed_info": trimmed_i,
+        "final_count": len(aggregated),
+    }
+    return aggregated, stats
+
+
+def _phase_rank(phase: str) -> int:
+    """Order phases so 'keep latest phase' dedup picks the most downstream result."""
+    try:
+        return _PHASE_ORDER.index(phase)
+    except ValueError:
+        return 99  # unknown phases rank last (most recent)
 
 
 def _diag(slide_idx, phase, d, kind="", severity="", deco_id="", elem_id="", message=""):
@@ -859,7 +1326,9 @@ def _render_slide(prs, canvas, template, slide_index=0, total_slides=1):
         if w <= 0 or h <= 0:
             continue
 
-        if ct == ContentType.IMAGE and payload and payload.image_path:
+        if ct == ContentType.TABLE and payload:
+            _render_table(slide, x, y, w, h, payload, template)
+        elif ct == ContentType.IMAGE and payload and payload.image_path:
             # Contain-fit image rendering: PIL natural size -> contain -> no crop, no stretch
             _render_image(slide, x, y, w, h, payload)
             # Optional caption
@@ -907,3 +1376,84 @@ def _render_slide(prs, canvas, template, slide_index=0, total_slides=1):
     pn.text_frame.paragraphs[0].font.size = Pt(template.page_number_size)
     pn.text_frame.paragraphs[0].font.color.rgb = RGBColor(*_hex_to_rgb(template.dim_hex)) if template.dim_hex else RGBColor(0x88, 0x88, 0x99)
     pn.text_frame.paragraphs[0].alignment = PP_ALIGN.RIGHT
+
+
+# ── P1-② Table rendering ──
+
+def _render_table(slide, x: float, y: float, w: float, h: float,
+                  payload, template) -> None:
+    """Render a table shape into the slide. Columns auto-sized; header row styled."""
+    from pptx.util import Pt, Emu
+    from pptx.dml.color import RGBColor
+    from pptx.oxml.ns import qn
+
+    headers = payload.table_headers or []
+    rows = payload.table_rows or []
+    if not headers and not rows:
+        return
+
+    n_cols = len(headers) if headers else (len(rows[0]) if rows else 1)
+    n_rows = 1 + len(rows)  # header + data
+
+    # Clamp — don't crash on bad input
+    n_cols = max(1, n_cols)
+    n_rows = max(1, n_rows)
+
+    col_w = w / n_cols
+    row_h = min(h / n_rows, 36.0)  # cap individual row height at 36pt
+
+    tbl_shape = slide.shapes.add_table(
+        n_rows, n_cols,
+        Emu(int(x * 12700)), Emu(int(y * 12700)),
+        Emu(int(w * 12700)), Emu(int(h * 12700)),
+    )
+    tbl = tbl_shape.table
+
+    # Column widths — equal distribution
+    col_emu = Emu(int(col_w * 12700))
+    for ci in range(n_cols):
+        tbl.columns[ci].width = col_emu
+
+    # Font config
+    font_sz = payload.font_size if payload and payload.font_size else 12.0
+    font_color = payload.font_color if payload else (0x33, 0x33, 0x44)
+    header_bg = _hex_to_rgb(template.accent_hex) if template.accent_hex else (0x1A, 0x1A, 0x2E)
+    if _is_dark(header_bg):
+        header_font_color = (0xFF, 0xFF, 0xFF)
+    else:
+        header_font_color = (0xFF, 0xFF, 0xFF) if _is_dark(header_bg) else (0x33, 0x33, 0x44)
+
+    for ri in range(n_rows):
+        data = headers if ri == 0 else rows[ri - 1]
+        is_header = (ri == 0)
+
+        for ci in range(n_cols):
+            cell = tbl.cell(ri, ci)
+            cell_text = str(data[ci]) if ci < len(data) else ""
+
+            # Cell fill
+            cell_fill = cell.fill
+            cell_fill.solid()
+            if is_header:
+                cell_fill.fore_color.rgb = RGBColor(*header_bg)
+            else:
+                bg_rgb = _hex_to_rgb(template.bg_hex) if template.bg_hex else (0xFF, 0xFF, 0xFF)
+                cell_fill.fore_color.rgb = RGBColor(*bg_rgb)
+
+            # Cell text
+            tf = cell.text_frame
+            tf.word_wrap = True
+            tf.margin_left = Pt(4)
+            tf.margin_right = Pt(4)
+            tf.margin_top = Pt(2)
+            tf.margin_bottom = Pt(2)
+
+            p = tf.paragraphs[0]
+            p.text = cell_text
+            p.font.size = Pt(font_sz)
+            p.font.bold = is_header
+            p.font.color.rgb = RGBColor(*header_font_color) if is_header else RGBColor(*font_color)
+
+            # Vertical center
+            tcPr = cell._tc.get_or_add_tcPr()
+            tcPr.set('anchor', 'ctr')

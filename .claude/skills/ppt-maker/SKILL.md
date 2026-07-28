@@ -142,16 +142,20 @@ b.add_slide("Slide title",
 b.title("Title text", region="header")                  # ⭐ Use this for headings — NOT b.text(Heading)
 b.subtitle("Subtitle text", region="header")            # 18pt, gray, ph=30
 b.text("Body text", style="Caption", region="main")     # ⭐ Use Caption — NOT Body/Heading/Emphasis/Subheading
-b.text("Raw text", style="Subheading", region="main")   # ⚠ Only in LARGE regions (≥120pt tall)
+# b.text(style="Subheading") → GUARANTEED overflow, see error table below
 
 # LISTS — always safe
 b.bullet("List item text", region="main")               # 13pt, auto-flow — ALWAYS SAFE
+
+# FOOTER
+b.footer("Copyright 2024", region="footer")             # dimmed, small — safe anywhere
 
 # CARDS — always safe (auto-height)
 b.box("Card content here\n\nMultiple paragraphs OK",
       style="Body", region="card",                      # style: Body only (not Heading/Subheading)
       fill_color=(16,26,45),                             # dark fill → white text automatic
-      shape_id="rounded_rectangle")                      # 20 shapes available (see below)
+      shape_id="rounded_rectangle",                      # 20 shapes available (see below)
+      ph=None, align_h="left", allow_shrink=False)       # ph=override height; align_h=left|center|right
 
 # SHAPES — always safe (pure graphics)
 b.shape("hexagon", region="center",                     # 20 shape IDs (see below)
@@ -159,8 +163,15 @@ b.shape("hexagon", region="center",                     # 20 shape IDs (see belo
 
 # IMAGES — safe without caption
 b.image("path/to/img.jpg", region="hero",
-        layout_mode="hero_top",                          # 7 modes (see below)
-        caption="")                                      # ⭐ Empty caption = safe. NEVER add caption text.
+        layout_mode="hero_top",                          # 7 modes or b.auto_layout_mode(path)
+        fit_mode="fit", allow_upscale=False,             # fit=contain; fill=crop
+        pw=400, ph=300, caption="")                      # ⭐ Empty caption = safe. NEVER add caption text.
+
+# TABLES — auto-sizes columns to region width
+b.table(headers=["Col A", "Col B", "Col C"],
+        rows=[["v1", "v2", "v3"], ["v4", "v5", "v6"]],
+        region="main")                                   # Header row: accent bg, white bold text
+# Each row MUST have len(headers) cells. Missing cells render as empty.
 
 # DECORATION — always safe
 b.divider(region="main", color=(34,211,238), width_pt=2.0)
@@ -203,9 +214,15 @@ for slide_result in b.build_stream("output.pptx"):
     elif slide_result["type"] == "summary":
         print(slide_result["summary"])
 
+# 增量修复：改一页不动其他页
+b.fix_slide(2, elements=[b.title("Fixed Title", region="header"), ...])
+r = b.rebuild([2], "output.pptx")  # 只重跑 slide 2 的 pipeline，其余走缓存
+# rebuild 返回格式同 build()，额外含 "cached_slides" 键
+
 # 传统一次性模式
 r = b.build("output.pptx")
-# Returns: {"ok": bool, "summary": str, "diagnostics": list, "path": str}
+# Returns: {"ok": bool, "summary": str, "diagnostics": list, "path": str,
+#           "raw_diagnostic_count": int, "collapsed": {dedup, batch, trimmed_*}}
 
 for d in r["diagnostics"]:
     if d["severity"] == "error":

@@ -29,6 +29,9 @@ def global_composition_check(plan: LayoutPlan) -> list[dict]:
     # 4. Alignment consistency
     _check_alignment(plan, issues)
 
+    # 5. Font hierarchy
+    _check_font_hierarchy(plan, issues)
+
     return issues
 
 
@@ -139,3 +142,46 @@ def _check_alignment(plan: LayoutPlan, issues: list[dict]) -> None:
                            f"(from {left_edges[0]:.0f} to {left_edges[-1]:.0f}) — "
                            f"consider uniform left alignment.",
             })
+
+
+def _check_font_hierarchy(plan: LayoutPlan, issues: list[dict]) -> None:
+    """Font hierarchy: title font_size > subtitle > body.
+
+    Checks every element with a payload — if any body-text element has
+    font_size >= the smallest title/subtitle element, the slide loses
+    visual hierarchy and the reader cannot tell what's important.
+    """
+    titles = []
+    bodies = []
+    for e in plan.elements:
+        p = e.payload
+        if not p or not p.text.strip():
+            continue
+        role = getattr(p, 'role', None)
+        role_name = role.name if hasattr(role, 'name') else str(role or '')
+        if 'TITLE' in role_name.upper() or 'HEADING' in role_name.upper():
+            titles.append((e.elem_id, p.font_size))
+        else:
+            bodies.append((e.elem_id, p.font_size))
+
+    if not titles or not bodies:
+        return
+
+    min_title_sz = min(sz for _, sz in titles)
+    violators = [(eid, sz) for eid, sz in bodies if sz >= min_title_sz]
+
+    if violators:
+        examples = ", ".join(f"{eid}({sz:.0f}pt)" for eid, sz in violators[:3])
+        issues.append({
+            "level": "warn",
+            "category": "font_hierarchy",
+            "message": (
+                f"Font hierarchy broken: {len(violators)} body elements have font_size "
+                f">= smallest title ({min_title_sz:.0f}pt). "
+                f"Offenders: {examples}"
+                f"{'...' if len(violators) > 3 else ''}. "
+                f"Shrink body text or enlarge titles to restore hierarchy."
+            ),
+            "violator_count": len(violators),
+            "min_title_pt": min_title_sz,
+        })

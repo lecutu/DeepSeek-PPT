@@ -140,6 +140,13 @@ b.shape("hexagon", region="center", fill_color=(34,211,238),
 b.image("path/img.jpg", region="hero",
         layout_mode="hero_top", caption="")        # NEVER add caption text
 
+# TABLES — P1-②
+b.table(headers=["Col A", "Col B", "Col C"],
+        rows=[["v1", "v2", "v3"], ["v4", "v5", "v6"]],
+        region="main")                             # auto-sizes columns to region width
+# Header row: accent background, white bold text. Data rows: bg-colored, regular font.
+# Each row MUST have len(headers) cells. Missing cells render as empty.
+
 # DECORATION — always safe
 b.divider(region="main", color=(34,211,238), width_pt=2.0)
 b.arrow(elem_a, elem_b, "label", "below",         # elem_a/elem_b = _Spec from b.box/b.shape
@@ -169,21 +176,15 @@ Or auto-infer: `b.auto_layout_mode("img.jpg")` — picks from aspect ratio:
 ### Build + diagnostics
 
 ```python
-# 新推荐：分页流式 (逐页 yield，AI 边跑边看)
-for slide_result in b.build_stream("output.pptx"):
-    if slide_result["type"] == "start":
-        print(f"Building {slide_result['total_slides']} slides...")
-    elif slide_result["type"] == "slide":
-        errs = [d for d in slide_result["diagnostics"] if d["severity"] == "error"]
-        if errs:
-            print(f"S{slide_result['slide']:02d}: {len(errs)} errors — STOP HERE, fix this page")
-            break
-    elif slide_result["type"] == "summary":
-        print(slide_result["summary"])
+# P1-① 增量重建：只重构建指定 slide，其余页走 pipeline 缓存
+b.fix_slide(2, elements=[b.title("Fixed Title", region="header"), ...])
+r = b.rebuild([2], "output.pptx")  # 只重跑 slide 2 的全套 pipeline
+# 返回格式同 build()
 
 # 传统模式：一次性完成 (含 roundtrip)
 r = b.build("output.pptx")
-# Returns: {"ok": bool, "summary": str, "diagnostics": list, "path": str}
+# Returns: {"ok": bool, "summary": str, "diagnostics": list, "path": str,
+#           "raw_diagnostic_count": int, "collapsed": {dedup, batch, trimmed_*}}
 
 for d in r["diagnostics"]:
     if d["severity"] == "error":
