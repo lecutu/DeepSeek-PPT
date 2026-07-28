@@ -77,11 +77,22 @@ print(f"Errors: {len(errs)}")  # Should be 0
 
 ## API Reference
 
-### Init
+### Init — on-demand loading
+
+**Agent workflow:** browse lightweight catalogs → user picks → builder loads only what's needed.
 
 ```python
-from ppt_reflex.builder import PPTBuilder
+from ppt_reflex.builder import PPTBuilder, list_style_presets
+from ppt_reflex.grid.templates import list_templates
+
+# ① Agent browses catalogs (no full Profile objects instantiated)
+print(list_templates())       # [{id, name, description, bg_hex, accent_hex}, ...]
+print(list_style_presets())   # [{id, display_name, mood, theme}, ...]
+
+# ② User picks → builder instantiates ONLY the chosen one
 b = PPTBuilder(template="minimal", style="tech_dark")
+# ↑ get_template("minimal") → 1 TemplateProfile, cached after first access
+# ↑ _apply_style("tech_dark") → reads JSON but discards other 5 presets
 ```
 
 ### Templates

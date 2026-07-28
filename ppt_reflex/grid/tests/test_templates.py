@@ -1,9 +1,9 @@
-from ppt_reflex.grid.templates import TEMPLATES, get_template
+from ppt_reflex.grid.templates import _TEMPLATE_DATA, get_template
 from ppt_reflex.grid.aesthetics import hex_to_rgb, contrast_ratio, luminance_L
 
-print(f"{len(TEMPLATES)} templates loaded\n")
+print(f"{len(_TEMPLATE_DATA)} templates loaded\n")
 
-for tid in TEMPLATES:
+for tid in sorted(_TEMPLATE_DATA):
     t = get_template(tid)
     cr = contrast_ratio(hex_to_rgb(t.text_hex), hex_to_rgb(t.bg_hex))
     bgL = luminance_L(hex_to_rgb(t.bg_hex))

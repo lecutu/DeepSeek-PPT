@@ -2,30 +2,27 @@
 ppt_reflex/builder.py — Sole AI entry point. All engine capabilities exposed here, pure interface zero engine concepts.
 
 from ppt_reflex.builder import PPTBuilder, load_style_presets, save_style_presets, list_style_presets, list_archetypes, get_archetype
+from ppt_reflex.grid.templates import list_templates
 
-# Basic usage (manual regions)
+# Agent workflow: browse lightweight catalogs → user picks → builder loads only what's needed
+
+print(list_templates())       # [{id, name, description, bg_hex, accent_hex, ...}, ...] — 6 entries
+print(list_style_presets())   # [{id, display_name, mood, theme}, ...]                   — 6 entries
+print(list_archetypes())      # [{id, name, description, guide}, ...]                    — 12 entries
+
+# User picks → builder instantiates ONLY the chosen template + style:
 builder = PPTBuilder(template="academic", style="academic_rigorous")
+# ^ get_template("academic") instantiates ONE TemplateProfile (cached after first access)
+# ^ _load_single_style_preset("academic_rigorous") reads JSON but discards other 5 presets
+
 builder.add_slide("Cover",
     regions=[("r1", 100,80,760,380)],
     elements=[builder.title("Title"), builder.text("Body", style="Body")],
 )
-
-# Semantic layout (auto regions + auto-routing)
-builder.add_slide("My Topic",
-    archetype="two_column",
-    elements=[
-        builder.title("Heading", region="header"),
-        builder.bullet("Left column point"),
-        builder.image("chart.png"),
-    ],
-)  # bullets → left, image → right — auto-routed via zone_map
 result = builder.build("out.pptx")
 
-# Discover available archetypes
-print(list_archetypes())  # [{id, name, description, guide}, ...]
-
-# Style preset management
-presets = load_style_presets()           # read current presets
+# Style preset management (for config editing, not for generation)
+presets = load_style_presets()           # read full config — use this to edit
 p = presets["academic_rigorous"]         # get one preset
 p["color_override"]["bg"] = "#FFFDF5"    # change background
 save_style_presets(presets)              # persist
@@ -71,6 +68,15 @@ def list_style_presets() -> list[dict]:
         {"id": pid, "display_name": p["display_name"], "mood": p["mood"], "theme": p["theme"]}
         for pid, p in data.get("presets", {}).items()
     ]
+
+
+def _load_single_style_preset(style_id: str) -> dict | None:
+    """Load ONLY one style preset from JSON — reads the file but discards all other presets.
+
+    Avoids loading full 6-preset JSON into LLM context. Returns the single preset dict or None.
+    """
+    data = load_style_presets()
+    return data.get("presets", {}).get(style_id)
 
 
 # ── WCAG luminance ──
@@ -168,6 +174,7 @@ class PPTBuilder:
     def __init__(self, template: str = "academic", style: str|None = None,
                  page_w: float = 960, page_h: float = 540,
                  template_pptx: str|None = None):
+        # Template: lazy — only this one gets instantiated
         self._t: TemplateProfile = get_template(template)
         self._style_preset: dict|None = None
         self._style_id: str|None = style
@@ -178,40 +185,41 @@ class PPTBuilder:
         self._style_body_font: str|None = None
         self._image_layout: dict|None = None
         self._layout_policy: LayoutPolicy = get_layout_policy(template)
-        self.diff_log = DiffLog()  # per-deck-session mutation trace, clear() on user confirm
-        # P1-①: incremental rebuild cache — slide_idx → (slide_hash, plan, canvas, diags)
+        self.diff_log = DiffLog()
         self._pipeline_cache: dict[int, tuple] = {}
 
         if style:
-            data = load_style_presets()
-            self._style_preset = data.get("presets", {}).get(style)
-            if self._style_preset:
-                c = self._style_preset["color_override"]
-                fo = self._style_preset.get("font_override", {})
-                so = self._style_preset.get("shape_override", {})
-                overrides = dict(
-                    bg_hex=c.get("bg", self._t.bg_hex),
-                    text_hex=c.get("text_primary", self._t.text_hex),
-                    title_hex=c.get("text_primary", self._t.title_hex),
-                    accent_hex=c.get("accent", self._t.accent_hex),
-                    accent2_hex=c.get("warn", self._t.accent2_hex),
-                    gray_hex=c.get("text_secondary", self._t.gray_hex),
-                    dim_hex=c.get("surface", self._t.dim_hex),
-                    title_size=fo.get("scale_h1", self._t.title_size),
-                    body_size=fo.get("scale_body", self._t.body_size),
-                    caption_size=fo.get("scale_h2", self._t.caption_size),
-                    divider_color_hex=c.get("accent", self._t.divider_color_hex),
-                )
-                self._t = self._t.override(**overrides)
-                # Fix #14: capture body_font from style preset if available
-                self._style_body_font = fo.get("body_font")
-                # v2: capture image_layout from preset
-                self._image_layout = self._style_preset.get("image_layout", None)
+            self._apply_style(style)
 
     def set_intent_scope(self, scope: dict):
         """Agent-declared intent scope: {"slide_ids":[2,3], "elem_ids":["box_3"]}.
         Used by DiffLog.scope_alert() to catch say-vs-do mismatch."""
         self.diff_log.set_intent_scope(scope)
+
+    def _apply_style(self, style_id: str) -> None:
+        """Load and apply a single style preset — only this one is loaded from JSON into memory."""
+        preset = _load_single_style_preset(style_id)
+        if not preset:
+            return
+        self._style_preset = preset
+        c = preset["color_override"]
+        fo = preset.get("font_override", {})
+        overrides = dict(
+            bg_hex=c.get("bg", self._t.bg_hex),
+            text_hex=c.get("text_primary", self._t.text_hex),
+            title_hex=c.get("text_primary", self._t.title_hex),
+            accent_hex=c.get("accent", self._t.accent_hex),
+            accent2_hex=c.get("warn", self._t.accent2_hex),
+            gray_hex=c.get("text_secondary", self._t.gray_hex),
+            dim_hex=c.get("surface", self._t.dim_hex),
+            title_size=fo.get("scale_h1", self._t.title_size),
+            body_size=fo.get("scale_body", self._t.body_size),
+            caption_size=fo.get("scale_h2", self._t.caption_size),
+            divider_color_hex=c.get("accent", self._t.divider_color_hex),
+        )
+        self._t = self._t.override(**overrides)
+        self._style_body_font = fo.get("body_font")
+        self._image_layout = preset.get("image_layout", None)
 
     # ── slide ──
     def add_slide(self, title: str = "", *, archetype: str|None = None,

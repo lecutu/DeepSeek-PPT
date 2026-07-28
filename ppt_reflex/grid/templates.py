@@ -1,10 +1,12 @@
 """
-grid/templates.py — PPT template color/font snapshot
+grid/templates.py — PPT template color/font snapshot.
 
 6 color schemes, all white/warm-white backgrounds, <=4 colors, contrast >= 4.5:1 (WCAG AA)
 Agent selects template -> engine validates -> auto-applies on generation
-"""
 
+Templates are stored as raw dicts and INSTANTIATED ON DEMAND (lazy).
+Agent browses with list_templates() — lightweight catalog, no TemplateProfile objects.
+"""
 from __future__ import annotations
 from dataclasses import dataclass, field
 
@@ -67,11 +69,11 @@ class TemplateProfile:
 
 
 # ═══════════════════════════════════════════════════════════
-# 6 templates
+# Raw template data — stored as dicts, NOT pre-instantiated
 # ═══════════════════════════════════════════════════════════
 
-TEMPLATES = {
-    "academic": TemplateProfile(
+_TEMPLATE_DATA: dict[str, dict] = {
+    "academic": dict(
         id="academic", name="Academic",
         description="Restrained, trustworthy, high information density. Deep navy + brick red accent, white bg",
         bg_hex="FFFFFF", text_hex="2D2D2D", title_hex="1B3A5C",
@@ -81,7 +83,7 @@ TEMPLATES = {
         divider_color_hex="1B3A5C", divider_width_pt=3.0,
         max_chars_per_slide=250, center_titles=False,
     ),
-    "business": TemplateProfile(
+    "business": dict(
         id="business", name="Business",
         description="Professional, clear, conclusion-first. Corporate blue + orange alert, white bg",
         bg_hex="FFFFFF", text_hex="333333", title_hex="0052D9",
@@ -91,7 +93,7 @@ TEMPLATES = {
         divider_color_hex="0052D9", divider_width_pt=2.0, card_rounding=8,
         max_chars_per_slide=180, center_titles=False,
     ),
-    "minimal": TemplateProfile(
+    "minimal": dict(
         id="minimal", name="Minimal",
         description="Breathing room, one message per slide. Dark gray + single bright accent, white bg",
         bg_hex="FFFFFF", text_hex="2A2A2F", title_hex="1A1A2E",
@@ -101,7 +103,7 @@ TEMPLATES = {
         divider_color_hex="2D5BD7", divider_width_pt=4.0,
         max_elements_per_slide=6, max_chars_per_slide=100, center_titles=True,
     ),
-    "data_report": TemplateProfile(
+    "data_report": dict(
         id="data_report", name="Data Report",
         description="Precise, grid-feel. Dark slate + data palette, white bg",
         bg_hex="FFFFFF", text_hex="212121", title_hex="37474F",
@@ -111,7 +113,7 @@ TEMPLATES = {
         page_margin=40, line_spacing=1.25,
         max_elements_per_slide=16, max_chars_per_slide=300, center_titles=False,
     ),
-    "teaching": TemplateProfile(
+    "teaching": dict(
         id="teaching", name="Teaching",
         description="Friendly, well-structured. Vibrant blue + orange markers, warm white bg",
         bg_hex="FFFDF5", text_hex="333333", title_hex="2196F3",
@@ -121,7 +123,7 @@ TEMPLATES = {
         divider_color_hex="E3F2FD", page_margin=60, line_spacing=1.45,
         max_elements_per_slide=8, max_chars_per_slide=180, center_titles=False,
     ),
-    "product": TemplateProfile(
+    "product": dict(
         id="product", name="Product Launch",
         description="Premium, visual impact. Dark gray bg + white text, dark bg allowed, all centered",
         bg_hex="1D1D1F", text_hex="E8E8EC", title_hex="FFFFFF",
@@ -134,33 +136,30 @@ TEMPLATES = {
     ),
 }
 
+# Lazy cache — TemplateProfile objects instantiated ONLY when requested
+_template_cache: dict[str, TemplateProfile] = {}
+
 
 def get_template(template_id: str) -> TemplateProfile:
-    if template_id not in TEMPLATES:
-        raise KeyError(f"Unknown template: {template_id}. Valid: {list(TEMPLATES.keys())}")
-    return TEMPLATES[template_id]
+    """Load a single TemplateProfile on demand. Cached after first access."""
+    if template_id not in _TEMPLATE_DATA:
+        raise KeyError(f"Unknown template: {template_id}. Valid: {sorted(_TEMPLATE_DATA.keys())}")
+    if template_id not in _template_cache:
+        _template_cache[template_id] = TemplateProfile(**_TEMPLATE_DATA[template_id])
+    return _template_cache[template_id]
 
 
-AGENT_PROMPT = """
-# PPT Template Selection Guide
+def list_templates() -> list[dict]:
+    """Lightweight catalog for agent browsing — summary only, no full profile objects.
 
-You are generating a PowerPoint deck. Choose one of the 6 templates below and apply the corresponding colors/fonts/spacing on the first slide.
-
-| ID | Name | Best for | Background | Primary | Body Text |
-|----|------|----------|------------|---------|-----------|
-| academic | Academic | Literature review / Defense / Seminar | #FFFFFF | #1B3A5C navy | #2D2D2D |
-| business | Business | Work summary / Annual report | #FFFFFF | #0052D9 corp blue | #333333 |
-| minimal  | Minimal | Share-out / TED talk | #FFFFFF | #2D5BD7 blue | #2A2A2F |
-| data_report | Data Report | Annual report / Analysis | #FFFFFF | #1976D2 blue | #212121 |
-| teaching | Teaching | Training / Course | #FFFDF5 warm white | #2196F3 blue | #333333 |
-| product  | Product Launch | Brand / Promo | #1D1D1F dark gray | #6366F1 purple | #E8E8EC |
-
-General rules:
-- <= 4 colors per deck (primary + accent + body + gray)
-- Body text >= 18pt, captions >= 14pt
-- No pure black (#000) / pure white (#FFF) backgrounds
-- No rainbow effect (<= 5 hues per slide)
-- Four-side safe zone >= 48pt
-
-After selecting a template, the engine auto-validates aesthetics rules during generation.
-"""
+    Returns: [{id, name, description, bg_hex, accent_hex, allow_dark_bg, center_titles}, ...]
+    """
+    return [
+        {
+            "id": t["id"], "name": t["name"], "description": t["description"],
+            "bg_hex": t["bg_hex"], "accent_hex": t["accent_hex"],
+            "allow_dark_bg": t.get("allow_dark_bg", False),
+            "center_titles": t.get("center_titles", False),
+        }
+        for t in _TEMPLATE_DATA.values()
+    ]
