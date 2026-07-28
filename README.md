@@ -300,6 +300,87 @@ ppt_reflex/
     └── CLAUDE.md
 ```
 
+## Using with DeepSeek
+
+DeepSeek models are text-only — they generate python-pptx code and hope it renders correctly. Two failure modes dominate:
+
+1. **Text overflow.** A `python-pptx` textbox with fixed dimensions silently clips text that doesn't fit. The AI declares a 200×30pt box for a 3-line paragraph; PowerPoint renders only the first line.
+2. **Invisible text.** Dark gray text (`#222244`) on a dark background (`#1A1A2E`) has 1.5:1 contrast. Legible and passes no `python-pptx` error, but invisible to a human reader. The AI can't see it.
+
+PPT Reflex catches both before the file is written. The DeepSeek agent writes declarations instead of raw python-pptx calls, the engine computes layout and runs a pre-render diagnostic pass, and structured diagnostics come back as JSON the agent can read and act on.
+
+### Setup
+
+```bash
+pip install git+https://github.com/lecutu/DeepSeek-PPT.git
+```
+
+### Workflow
+
+```
+DeepSeek agent writes:
+    b = PPTBuilder(template="minimal", style="tech_dark")
+    b.add_slide("Introduction", archetype="content", elements=[...])
+    result = b.build("draft.pptx")
+
+Engine returns:
+    {
+      "ok": false,
+      "diagnostics": [
+        {"elem_id": "box_3", "phase": "freeze", "kind": "overflow_v",
+         "severity": "error", "message": "text needs 52pt, box is 30pt",
+         "options": ["shrink font to 11pt", "widen box by 40pt"]}
+      ]
+    }
+
+DeepSeek agent reads diagnostics, picks a fix, calls fix_slide(), rebuilds.
+```
+
+No vision. No manual inspection. The agent reads JSON, decides, and loops until `ok: true`.
+
+### Minimal working script
+
+```python
+from ppt_reflex.builder import PPTBuilder
+
+b = PPTBuilder(template="minimal", style="tech_dark")
+ACCENT = (34, 211, 238)
+DARK = (16, 26, 45)
+
+b.add_slide("Why This Exists",
+    archetype="content",
+    elements=[
+        b.title("python-pptx Is Blind"),
+        b.bullet("DeepSeek generates python-pptx code it cannot verify"),
+        b.bullet("Text overflow and invisible text are silent failures"),
+        b.bullet("PPT Reflex adds a pre-render diagnostic pass"),
+        b.box("Every LLM can read JSON.\nNo vision required.", style="Body",
+              fill_color=DARK),
+    ],
+)
+
+result = b.build("output.pptx")
+print(result["summary"])
+# → "0 errors"
+```
+
+### Layout archetypes
+
+Instead of hand-calculating pixel coordinates, use one of 12 archetypes:
+
+```python
+b.add_slide("Comparison", archetype="comparison",
+    elements=[
+        b.title("Before vs After"),
+        b.box("python-pptx alone:\n40% overflow rate", style="Body"),
+        b.box("With PPT Reflex:\n0 errors guaranteed", style="Body"),
+    ])
+```
+
+Archetypes: `title_cover`, `content`, `two_column`, `comparison`, `data_showcase`, `grid_cards`, `image_hero`, `conclusion`, `section`, `quote`, `timeline`, `blank`.
+
+Each archetype defines preset regions and auto-routes elements — the title goes to the header, bullet points to the main column, boxes to the sidebar. Explicit `region=` overrides when needed.
+
 ## Design Philosophy
 
 > **The engine computes truth and returns options. It never silently mutates the AI's declarations.**
