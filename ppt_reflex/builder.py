@@ -14,6 +14,7 @@ print(list_archetypes())      # [{id, name, description, guide}, ...]           
 builder = PPTBuilder(template="academic", style="academic_rigorous")
 # ^ get_template("academic") instantiates ONE TemplateProfile (cached after first access)
 # ^ _load_single_style_preset("academic_rigorous") reads JSON but discards other 5 presets
+# ^ overrides={"bg_hex": "#000", "accent_hex": "#F00"} for arbitrary color/font override
 
 builder.add_slide("Cover",
     regions=[("r1", 100,80,760,380)],
@@ -172,6 +173,7 @@ class PPTBuilder:
     """Sole AI entry point. add_slide -> build. Engine + templates fully transparent."""
 
     def __init__(self, template: str = "academic", style: str|None = None,
+                 overrides: dict|None = None,
                  page_w: float = 960, page_h: float = 540,
                  template_pptx: str|None = None):
         # Template: lazy — only this one gets instantiated
@@ -188,8 +190,14 @@ class PPTBuilder:
         self.diff_log = DiffLog()
         self._pipeline_cache: dict[int, tuple] = {}
 
+        # P0+P1: circuit breaker — cross-build fix-loop detection
+        from ppt_reflex.design_policy import CircuitBreaker
+        self._breaker = CircuitBreaker()
+
         if style:
             self._apply_style(style)
+        if overrides:
+            self._t = self._t.override(**overrides)
 
     def set_intent_scope(self, scope: dict):
         """Agent-declared intent scope: {"slide_ids":[2,3], "elem_ids":["box_3"]}.
@@ -668,8 +676,24 @@ class PPTBuilder:
         aggregated_diags, agg_stats = _aggregate_diagnostics(all_diags)
         errs = [d for d in aggregated_diags if d.get("severity") in ("error",)]
 
-        return {"path": path, "ok": len(errs) == 0 and len(rt_errors) == 0,
+        # P0+P1: design policy + circuit breaker — detects fix-loops and systemic issues
+        from ppt_reflex.design_policy import analyze_design_issues, gather_slides_data
+        slides_data = gather_slides_data(self)
+        design_hints = analyze_design_issues(aggregated_diags, all_diags, slides_data,
+                                             breaker=self._breaker)
+
+        # Hard block: if breaker has escalated to BLOCK, ok=False regardless
+        blocked = self._breaker.blocked_fingerprints()
+        hard_blocked = len(blocked) > 0 and self._breaker.build_count >= 3
+        build_ok = len(errs) == 0 and len(rt_errors) == 0 and not hard_blocked
+
+        return {"path": path, "ok": build_ok,
                 "diagnostics": aggregated_diags,
+                "design_hints": design_hints,
+                "build_number": self._breaker.build_count,
+                "hard_blocked": hard_blocked,
+                "blocked_fingerprints": [b._asdict() for b in blocked],
+                "entropy_stalled": self._breaker.is_stalled,
                 "raw_diagnostic_count": agg_stats["raw_count"],
                 "collapsed": {"dedup": agg_stats["dedup"],
                               "batch": agg_stats["batch"],
@@ -849,10 +873,24 @@ class PPTBuilder:
         aggregated_diags, agg_stats = _aggregate_diagnostics(all_diags)
         errs = [d for d in aggregated_diags if d.get("severity") in ("error",)]
 
+        # P0+P1: design policy + circuit breaker
+        from ppt_reflex.design_policy import analyze_design_issues, gather_slides_data
+        slides_data = gather_slides_data(self)
+        design_hints = analyze_design_issues(aggregated_diags, all_diags, slides_data,
+                                             breaker=self._breaker)
+        blocked = self._breaker.blocked_fingerprints()
+        hard_blocked = len(blocked) > 0 and self._breaker.build_count >= 3
+        build_ok = len(errs) == 0 and len(rt_errors) == 0 and not hard_blocked
+
         return {
             "path": path,
-            "ok": len(errs) == 0 and len(rt_errors) == 0,
+            "ok": build_ok,
             "diagnostics": aggregated_diags,
+            "design_hints": design_hints,
+            "build_number": self._breaker.build_count,
+            "hard_blocked": hard_blocked,
+            "blocked_fingerprints": [b._asdict() for b in blocked],
+            "entropy_stalled": self._breaker.is_stalled,
             "raw_diagnostic_count": agg_stats["raw_count"],
             "collapsed": {"dedup": agg_stats["dedup"],
                           "batch": agg_stats["batch"],
@@ -873,6 +911,24 @@ class PPTBuilder:
     def clear_cache(self):
         """Drop incremental rebuild cache (e.g. after template switch)."""
         self._pipeline_cache.clear()
+
+    def clear_circuit_breaker(self):
+        """Reset fix-loop tracking — call after a DESIGN-LEVEL change (template switch,
+        layout redesign, content rewrite). Does NOT clear pipeline cache."""
+        self._breaker.reset()
+
+    def declare_direction(self, direction: str) -> str | None:
+        """Declare the fix direction for the upcoming build()/rebuild() call.
+
+        Valid directions: increase_box_height, increase_box_width, decrease_font_size,
+        increase_region, rearrange_regions, reduce_text, split_text, shorter_lines,
+        remove_elements, split_slide, switch_layout, switch_region_order,
+        change_text_color, change_fill_color, switch_template, switch_style,
+        dark_to_light, light_to_dark.
+
+        Returns error string if invalid, None if OK.
+        """
+        return self._breaker.declare_direction(direction)
 
 
     def title(self, text: str, region: str = "main") -> _Spec:

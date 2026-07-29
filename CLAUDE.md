@@ -93,6 +93,12 @@ print(list_style_presets())   # [{id, display_name, mood, theme}, ...]
 b = PPTBuilder(template="minimal", style="tech_dark")
 # ↑ get_template("minimal") → 1 TemplateProfile, cached after first access
 # ↑ _apply_style("tech_dark") → reads JSON but discards other 5 presets
+
+# ②-bis Arbitrary override — jump outside any template
+b = PPTBuilder(template="minimal", style="tech_dark",
+               overrides={"bg_hex": "000000", "accent_hex": "FF6B35",
+                          "title_font": "Arial", "body_size": 24})
+# ↑ overrides apply AFTER style — any TemplateProfile field can be overridden
 ```
 
 ### Templates
@@ -221,6 +227,65 @@ for d in r["diagnostics"]:
 1. **Diagnosis ≠ crash.** `b.box()` overflow is WARNING not error. PPTX auto-expands. Only `severity: "error"` matters.
 2. **Batch fix, don't loop.** grep all same-issue → bulk edit → ONE run. Never: fix → run → fix → run.
 3. **Read fragments, not full file.** `Read(file, offset=N, limit=30)` for the broken slide only. Only re-read full file when rewriting.
+
+### Circuit Breaker — fix-loop prevention (P0+P1)
+
+**每次 build 前必须声明修复方向。** 引擎追踪 `(slide, kind, elem_id, direction)` 四元组：
+
+```python
+b.declare_direction("reduce_text")   # 声明：这次我打算减少文字量
+b.declare_direction("split_slide")   # 声明：这次我拆成两页
+r = b.build("out.pptx")
+# breaker 会判断这个方向上之前试过几次
+```
+
+**可用方向：**
+| 类型 | 方向 ID | 中文 |
+|:--|:--|:--|
+| 机械（危险） | `increase_box_height` | 加大盒子高度 |
+| | `decrease_font_size` | 缩小字号 |
+| | `increase_region` | 扩大区域 |
+| 内容 | `reduce_text` | 减少文字量 |
+| | `split_text` | 拆成多块 |
+| | `remove_elements` | 删除元素 |
+| 布局 | `split_slide` | 拆成两页 |
+| | `switch_layout` | 换布局方案 |
+| 配色 | `switch_template` | 换模板 |
+| | `light_to_dark` | 浅→深背景 |
+| | `dark_to_light` | 深→浅背景 |
+
+**升级规则：**
+- 同一方向对同一错误重复 ≥2 次 → ⚠ WARN
+- 同一方向对同一错误重复 ≥3 次 → ⛔ BLOCK, `ok=False`
+- 同一错误上试了 ≥3 种不同的**机械**方向 → ⛔ 机械死循环，直接 BLOCK
+
+**关键返回字段：**
+```python
+r = b.build("out.pptx")
+# r["ok"]                  — False if hard_blocked
+# r["hard_blocked"]        — True when ≥1 fingerprint at BLOCK
+# r["blocked_fingerprints"]—
+#   [{"slide":N, "kind":"overflow_vertical", "elem_id":"box_3",
+#     "blocked_directions":[{"direction":"increase_box_height","attempts":3}]}]
+# r["entropy_stalled"]     — 连续 3 次误差波动 <20%
+# r["design_hints"]        — DesignHint list, meta 级含 escalation message
+# r["build_number"]        — 单调递增
+```
+
+**正确的修复循环：**
+```python
+b.declare_direction("reduce_text")   # 先试内容方向
+r = b.build("out.pptx")
+if r["hard_blocked"]:
+    # 读 r["blocked_fingerprints"] → 排除已死亡方向
+    # 选全新方向 → b.declare_direction("split_slide") → b.build()
+elif r["entropy_stalled"]:
+    # 微调无效 → 换方向
+elif not r["ok"]:
+    # 新错误 → 逐条修
+```
+
+**解除熔断：** `b.clear_circuit_breaker()` — 设计级变更后重置。
 
 ### Open generated file
 
