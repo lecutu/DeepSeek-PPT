@@ -1,0 +1,702 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "description": "Theme = template + style + spacing + typography + decoration + anti-AI rules. One entry point, all aesthetics resolved.",
+    "base_unit_pt": 8,
+    "note": "All spacing values pre-resolved from BaseUnit. Fonts restricted to Windows 10 pre-installed set."
+  },
+  "themes": {
+    "academic_research": {
+      "display_name": "科研学术",
+      "description": "论文答辩/组会汇报/学术会议 — 证据导向，高密度",
+      "mood": "rigorous, evidence-first, high density",
+      "template": "academic",
+      "style": "academic_rigorous",
+      "layout_strategy": {
+        "primary_archetype": "two_column",
+        "text_width_ratio": 0.3,
+        "image_width_ratio": 0.65,
+        "alignment": "top",
+        "grid_system": "strict",
+        "preferred_archetypes": [
+          "two_column",
+          "data_showcase",
+          "content",
+          "conclusion"
+        ],
+        "avoid_archetypes": [
+          "quote",
+          "image_hero",
+          "creative_vibrant"
+        ]
+      },
+      "design_dials": {
+        "variance": 4,
+        "motion": 2,
+        "density": 7
+      },
+      "spacing": {
+        "page_margin_pt": 28,
+        "card_gap_pt": 16,
+        "paragraph_gap_pt": 8,
+        "text_image_gap_pt": 16,
+        "line_spacing": 1.25,
+        "content_inset_pt": 10
+      },
+      "typography": {
+        "title": {
+          "font": "Times New Roman",
+          "size_pt": 28,
+          "weight": "regular",
+          "color": "#0A0A0A"
+        },
+        "subtitle": {
+          "font": "Times New Roman",
+          "size_pt": 20,
+          "weight": "regular",
+          "color": "#737373"
+        },
+        "body": {
+          "font": "Arial",
+          "size_pt": 14,
+          "weight": "regular",
+          "color": "#1A1A1A"
+        },
+        "caption": {
+          "font": "楷体",
+          "size_pt": 11,
+          "weight": "regular",
+          "color": "#737373",
+          "position": "below_image_center"
+        },
+        "reference": {
+          "font": "Arial",
+          "size_pt": 9,
+          "weight": "regular",
+          "color": "#737373",
+          "position": "bottom_left"
+        },
+        "key_number": {
+          "font": "Arial",
+          "size_pt": 36,
+          "weight": "bold",
+          "color": "#1B3A5C"
+        }
+      },
+      "color_roles": {
+        "bg": "#FAFAF8",
+        "surface": "#F0F0EE",
+        "text_primary": "#0A0A0A",
+        "text_secondary": "#737373",
+        "accent": "#1B3A5C",
+        "accent_soft": "#E8EDF2",
+        "on_accent": "#FFFFFF",
+        "warn": "#C0392B",
+        "grey_1": "#F0F0EE",
+        "grey_2": "#D4D4D2",
+        "grey_3": "#737373"
+      },
+      "swiss": {
+        "paper": "#FAFAF8",
+        "ink": "#0A0A0A",
+        "greys": [
+          "#F0F0EE",
+          "#D4D4D2",
+          "#737373"
+        ],
+        "single_accent": true,
+        "no_rounding": true,
+        "no_shadows": true,
+        "no_gradients": true,
+        "weight_ladder": "bigger_font_lighter_weight"
+      },
+      "decoration_policy": {
+        "type": "top_bottom_frame",
+        "width_pt": 12,
+        "color": "#999999",
+        "position": "top_bottom",
+        "description": "上下各 12pt 粗边框 — 版心界定，减少视觉留白"
+      },
+      "anti_ai_rules": [
+        "no_decorative_shapes_on_data_area",
+        "no_gradients_or_glows",
+        "no_rounded_cards",
+        "image_must_be_high_res",
+        "captions_must_be_numbered",
+        "data_sources_must_be_cited",
+        "no_pure_white_or_pure_black_text",
+        "no_em_dash_in_copy",
+        "no_section_number_eyebrow",
+        "no_version_label_in_hero",
+        "shape_family_consistency",
+        "no_same_layout_all_slides",
+        "accent_coverage_max_20pct",
+        "shape_types_max_2",
+        "shape_style_no_mix",
+        "shape_size_anchor_rule"
+      ],
+      "palettes": [
+        {
+          "id": "anthropic_ivory",
+          "display": "暖米白×赭橙 (Anthropic)",
+          "note": "Anthropic 演示实测 — 暖米白底 #F5F0EB, 赭橙 #C76B4A",
+          "bg": "#F5F0EB",
+          "surface": "#E8DDD3",
+          "text_primary": "#1A1A1A",
+          "text_secondary": "#888888",
+          "accent": "#C76B4A",
+          "on_accent": "#FFFFFF"
+        },
+        {
+          "id": "med_blue_white",
+          "display": "医学蓝白导航",
+          "note": "医学PPT实测 — 白底 + 深蓝导航条",
+          "bg": "#FFFFFF",
+          "surface": "#E8EDF5",
+          "text_primary": "#1A1A1A",
+          "text_secondary": "#666666",
+          "accent": "#2B5BA0",
+          "on_accent": "#FFFFFF"
+        },
+        {
+          "id": "deepsea_brick",
+          "display": "深海蓝×赭橙",
+          "note": "神经科学海报实测 — 深蓝侧栏 + 赭橙强调",
+          "bg": "#16213E",
+          "surface": "#1B2A4A",
+          "text_primary": "#FFFFFF",
+          "text_secondary": "#A0B4CC",
+          "accent": "#C76B4A",
+          "on_accent": "#FFFFFF"
+        }
+      ]
+    },
+    "corporate_consulting": {
+      "display_name": "咨询商务",
+      "description": "战略汇报/项目提案/季度总结 — 逻辑模块化，层级分明",
+      "mood": "professional, modular, authoritative",
+      "template": "business",
+      "style": "corporate_minimal",
+      "layout_strategy": {
+        "primary_archetype": "grid_cards",
+        "header_height_pt": 48,
+        "content_alignment": "block_grid",
+        "card_style": "solid_background",
+        "preferred_archetypes": [
+          "content",
+          "grid_cards",
+          "comparison",
+          "data_showcase",
+          "conclusion"
+        ],
+        "avoid_archetypes": [
+          "quote",
+          "blank",
+          "image_hero"
+        ]
+      },
+      "design_dials": {
+        "variance": 4,
+        "motion": 2,
+        "density": 6
+      },
+      "spacing": {
+        "page_margin_pt": 36,
+        "card_gap_pt": 24,
+        "paragraph_gap_pt": 12,
+        "card_inner_padding_pt": 16,
+        "line_spacing": 1.5,
+        "content_inset_pt": 14
+      },
+      "typography": {
+        "title": {
+          "font": "微软雅黑",
+          "size_pt": 32,
+          "weight": "bold",
+          "color": "#0A0A0A"
+        },
+        "subtitle": {
+          "font": "微软雅黑",
+          "size_pt": 20,
+          "weight": "regular",
+          "color": "#737373"
+        },
+        "body": {
+          "font": "微软雅黑",
+          "size_pt": 14,
+          "weight": "regular",
+          "color": "#1A1A1A"
+        },
+        "caption": {
+          "font": "微软雅黑",
+          "size_pt": 12,
+          "weight": "regular",
+          "color": "#737373"
+        },
+        "key_number": {
+          "font": "Arial",
+          "size_pt": 48,
+          "weight": "bold",
+          "color": "_accent_"
+        },
+        "sub_header": {
+          "font": "微软雅黑",
+          "size_pt": 18,
+          "weight": "bold",
+          "color": "#0A0A0A"
+        },
+        "reference": {
+          "font": "微软雅黑",
+          "size_pt": 10,
+          "weight": "regular",
+          "color": "#737373"
+        }
+      },
+      "color_roles": {
+        "bg": "#FAFAF8",
+        "surface": "#F0F0EE",
+        "text_primary": "#0A0A0A",
+        "text_secondary": "#737373",
+        "accent": "#0052D9",
+        "accent_soft": "#E8EEFC",
+        "on_accent": "#FFFFFF",
+        "warn": "#ED7B2F",
+        "grey_1": "#F0F0EE",
+        "grey_2": "#D4D4D2",
+        "grey_3": "#737373"
+      },
+      "swiss": {
+        "paper": "#FAFAF8",
+        "ink": "#0A0A0A",
+        "greys": [
+          "#F0F0EE",
+          "#D4D4D2",
+          "#737373"
+        ],
+        "single_accent": true,
+        "no_rounding": true,
+        "no_shadows": true,
+        "no_gradients": true,
+        "weight_ladder": "bigger_font_lighter_weight"
+      },
+      "decoration_policy": {
+        "type": "left_rail_accent",
+        "width_pt": 20,
+        "color": "_accent_",
+        "position": "left_edge",
+        "description": "左侧 20px 宽的竖条色块 — 视觉导航与压住阵脚"
+      },
+      "anti_ai_rules": [
+        "avoid_full_sentences_in_bullets",
+        "ensure_perfect_alignment_in_grid",
+        "no_more_than_5_bullets_per_slide",
+        "key_numbers_must_be_large_and_bold",
+        "cards_must_have_consistent_size",
+        "no_gradients_or_shadows",
+        "no_em_dash_in_copy",
+        "no_section_number_eyebrow",
+        "no_version_label_in_hero",
+        "shape_family_consistency",
+        "single_accent_color_lock",
+        "no_same_layout_all_slides",
+        "accent_coverage_max_20pct",
+        "shape_types_max_2",
+        "shape_style_no_mix",
+        "shape_size_anchor_rule"
+      ],
+      "palettes": [
+        {
+          "id": "consult_navy_brick",
+          "display": "深蓝×赭橙 (神经科学)",
+          "note": "神经科学实测 — 暖白底 + 深蓝 + 赭橙",
+          "bg": "#F5F2ED",
+          "surface": "#E8E4DE",
+          "text_primary": "#1A1A1A",
+          "text_secondary": "#7A8A9C",
+          "accent": "#2B5BA0",
+          "accent2": "#C76B4A",
+          "on_accent": "#FFFFFF"
+        },
+        {
+          "id": "consult_blue",
+          "display": "咨询深蓝",
+          "note": "咨询基准 — 白底 + 品牌蓝",
+          "bg": "#FAFAF8",
+          "surface": "#F0F0EE",
+          "text_primary": "#0A0A0A",
+          "text_secondary": "#737373",
+          "accent": "#0052D9",
+          "on_accent": "#FFFFFF"
+        }
+      ]
+    },
+    "tech_product": {
+      "display_name": "科技产品",
+      "description": "产品发布/路演/品牌宣传 — 沉浸感，视觉冲击",
+      "mood": "immersive, dramatic, cutting-edge",
+      "template": "product",
+      "style": "tech_dark",
+      "layout_strategy": {
+        "primary_archetype": "image_hero",
+        "image_behavior": "full_bleed_or_large",
+        "text_overlay": true,
+        "safe_zone": "center_rect_60_percent",
+        "preferred_archetypes": [
+          "title_cover",
+          "image_hero",
+          "quote",
+          "grid_cards",
+          "conclusion"
+        ],
+        "avoid_archetypes": [
+          "data_showcase",
+          "comparison",
+          "two_column"
+        ]
+      },
+      "design_dials": {
+        "variance": 7,
+        "motion": 6,
+        "density": 4
+      },
+      "spacing": {
+        "page_margin_pt": 0,
+        "card_gap_pt": 32,
+        "paragraph_gap_pt": 16,
+        "text_area_padding_pt": 40,
+        "line_spacing": 1.2,
+        "content_inset_pt": 16
+      },
+      "typography": {
+        "impact_title": {
+          "font": "微软雅黑",
+          "size_pt": 56,
+          "weight": "bold",
+          "color": "#FFFFFF"
+        },
+        "title": {
+          "font": "微软雅黑",
+          "size_pt": 40,
+          "weight": "bold",
+          "color": "#FFFFFF"
+        },
+        "subtitle": {
+          "font": "Arial",
+          "size_pt": 24,
+          "weight": "regular",
+          "color": "#A9B6CF"
+        },
+        "body": {
+          "font": "微软雅黑",
+          "size_pt": 16,
+          "weight": "regular",
+          "color": "#E8E8EC"
+        },
+        "caption": {
+          "font": "Arial",
+          "size_pt": 11,
+          "weight": "regular",
+          "color": "#98989E"
+        },
+        "key_number": {
+          "font": "Arial",
+          "size_pt": 64,
+          "weight": "bold",
+          "color": "_accent_"
+        },
+        "reference": {
+          "font": "Arial",
+          "size_pt": 10,
+          "weight": "regular",
+          "color": "#68686E"
+        }
+      },
+      "color_roles": {
+        "bg": "#0B1020",
+        "surface": "#141B2D",
+        "text_primary": "#EAF0FB",
+        "text_secondary": "#A9B6CF",
+        "accent": "#22D3EE",
+        "accent_soft": "#10303A",
+        "on_accent": "#06121A",
+        "warn": "#FB7185",
+        "success": "#34D399",
+        "grey_1": "#141B2D",
+        "grey_2": "#2A3350",
+        "grey_3": "#A9B6CF"
+      },
+      "swiss": {
+        "paper": "#0B1020",
+        "ink": "#EAF0FB",
+        "greys": [
+          "#141B2D",
+          "#2A3350",
+          "#A9B6CF"
+        ],
+        "single_accent": true,
+        "no_rounding": true,
+        "no_shadows": true,
+        "no_gradients": false,
+        "weight_ladder": "bigger_font_lighter_weight"
+      },
+      "decoration_policy": {
+        "type": "bottom_accent_bar",
+        "height_pt": 40,
+        "color": "_accent_dark_",
+        "position": "page_bottom",
+        "description": "底部 40px 高的长条色块，承载 Logo 或 Slogan"
+      },
+      "anti_ai_rules": [
+        "avoid_white_background",
+        "minimize_text_count_per_slide",
+        "use_gradient_overlay_for_image_readability",
+        "one_hero_element_per_slide",
+        "no_bullet_lists_over_3_items",
+        "no_rounded_cards_with_shadows",
+        "text_over_images_must_have_dark_overlay",
+        "no_em_dash_in_copy",
+        "no_section_number_eyebrow",
+        "no_version_label_in_hero",
+        "shape_family_consistency",
+        "single_accent_color_lock",
+        "no_same_layout_all_slides",
+        "accent_coverage_max_20pct",
+        "shape_types_max_2",
+        "shape_style_no_mix",
+        "shape_size_anchor_rule"
+      ],
+      "palettes": [
+        {
+          "id": "deepsea_brick",
+          "display": "深海蓝×赭橙",
+          "note": "神经科学海报实测 — 深蓝底 + 赭橙强调",
+          "bg": "#16213E",
+          "surface": "#1B2A4A",
+          "surface_dark": "#0F1B33",
+          "text_primary": "#F5F0EB",
+          "text_secondary": "#A0B4CC",
+          "accent": "#C76B4A",
+          "accent_light": "#E0986C",
+          "on_accent": "#FFFFFF"
+        },
+        {
+          "id": "klein_blue",
+          "display": "克莱因蓝 IKB (guizang)",
+          "note": "guizang Swiss Style A — IKB #002FA7 on dark",
+          "bg": "#0B1020",
+          "surface": "#141B2D",
+          "text_primary": "#FFFFFF",
+          "text_secondary": "#A9B6CF",
+          "accent": "#002FA7",
+          "on_accent": "#FFFFFF"
+        },
+        {
+          "id": "safety_orange",
+          "display": "安全橙 (guizang)",
+          "note": "guizang Swiss — IKEA 风亮橙",
+          "bg": "#0B1020",
+          "surface": "#141B2D",
+          "text_primary": "#FFFFFF",
+          "text_secondary": "#A9B6CF",
+          "accent": "#FF6700",
+          "on_accent": "#FFFFFF"
+        },
+        {
+          "id": "lemon_green",
+          "display": "柠檬绿 (guizang)",
+          "note": "guizang Swiss — 未来感柠檬绿",
+          "bg": "#0B1020",
+          "surface": "#141B2D",
+          "text_primary": "#FFFFFF",
+          "text_secondary": "#A9B6CF",
+          "accent": "#C5E803",
+          "on_accent": "#0A0A0A"
+        }
+      ]
+    },
+    "minimalist_creative": {
+      "display_name": "极简创意",
+      "description": "个人分享/艺术汇报/轻松话题 — 打破常规，呼吸感",
+      "mood": "airy, artistic, rule-breaking",
+      "template": "minimal",
+      "style": "editorial_magazine",
+      "layout_strategy": {
+        "primary_archetype": "blank",
+        "grid_system": "free_position",
+        "overlap_allowed": true,
+        "preferred_archetypes": [
+          "title_cover",
+          "quote",
+          "image_hero",
+          "content",
+          "conclusion"
+        ],
+        "avoid_archetypes": [
+          "grid_cards",
+          "data_showcase",
+          "comparison",
+          "timeline"
+        ]
+      },
+      "design_dials": {
+        "variance": 9,
+        "motion": 4,
+        "density": 2
+      },
+      "spacing": {
+        "page_margin_pt": 48,
+        "card_gap_pt": 32,
+        "paragraph_gap_pt": 24,
+        "line_spacing": 1.6,
+        "content_inset_pt": 20,
+        "prefer_asymmetric": true
+      },
+      "typography": {
+        "art_title": {
+          "font": "楷体",
+          "size_pt": 44,
+          "weight": "regular",
+          "color": "#000000"
+        },
+        "title": {
+          "font": "楷体",
+          "size_pt": 36,
+          "weight": "regular",
+          "color": "#14110E"
+        },
+        "subtitle": {
+          "font": "微软雅黑",
+          "size_pt": 18,
+          "weight": "light",
+          "color": "#888888"
+        },
+        "body": {
+          "font": "微软雅黑",
+          "size_pt": 12,
+          "weight": "light",
+          "color": "#666666"
+        },
+        "caption": {
+          "font": "微软雅黑",
+          "size_pt": 11,
+          "weight": "light",
+          "color": "#AAAAAA"
+        },
+        "quote": {
+          "font": "楷体",
+          "size_pt": 24,
+          "weight": "regular",
+          "color": "#333333"
+        },
+        "reference": {
+          "font": "微软雅黑",
+          "size_pt": 10,
+          "weight": "light",
+          "color": "#BBBBBB"
+        }
+      },
+      "color_roles": {
+        "bg": "#F7F4EF",
+        "surface": "#F0ECe6",
+        "text_primary": "#14110E",
+        "text_secondary": "#737373",
+        "accent": "#C2410C",
+        "accent_soft": "#F3E2D8",
+        "on_accent": "#FFFFFF",
+        "warn": "#DC2626",
+        "grey_1": "#F0ECE6",
+        "grey_2": "#D9D2C9",
+        "grey_3": "#737373"
+      },
+      "swiss": {
+        "paper": "#F7F4EF",
+        "ink": "#14110E",
+        "greys": [
+          "#F0ECE6",
+          "#D9D2C9",
+          "#737373"
+        ],
+        "single_accent": true,
+        "no_rounding": true,
+        "no_shadows": true,
+        "no_gradients": true,
+        "weight_ladder": "bigger_font_lighter_weight"
+      },
+      "decoration_policy": {
+        "type": "single_dot",
+        "size_pt": 6,
+        "color": "#333333",
+        "position": "bottom_right_corner",
+        "description": "仅在页面右下角放置一个极小的圆点"
+      },
+      "anti_ai_rules": [
+        "never_use_decorative_shapes",
+        "leave_half_page_empty",
+        "text_must_be_under_30_words_per_slide",
+        "no_grid_layouts",
+        "no_more_than_3_elements_per_slide",
+        "allow_asymmetric_placement",
+        "no_bold_body_text",
+        "no_pure_black_pure_white",
+        "no_em_dash_in_copy",
+        "no_section_number_eyebrow",
+        "no_version_label_in_hero",
+        "no_same_layout_all_slides"
+      ],
+      "palettes": [
+        {
+          "id": "lemon_yellow",
+          "display": "柠檬黄 (guizang)",
+          "note": "guizang Swiss — IKEA 风柠檬黄",
+          "bg": "#F7F4EF",
+          "surface": "#F0ECE6",
+          "text_primary": "#14110E",
+          "text_secondary": "#737373",
+          "accent": "#FFD500",
+          "on_accent": "#0A0A0A"
+        },
+        {
+          "id": "klein_blue_light",
+          "display": "克莱因蓝 (guizang)",
+          "note": "guizang Swiss — 浅底 IKB",
+          "bg": "#F7F4EF",
+          "surface": "#F0ECE6",
+          "text_primary": "#14110E",
+          "text_secondary": "#737373",
+          "accent": "#002FA7",
+          "on_accent": "#FFFFFF"
+        }
+      ]
+    }
+  },
+  "selection_guide": {
+    "by_audience": {
+      "academic_committee": "academic_research",
+      "executive_board": "corporate_consulting",
+      "investors_media": "tech_product",
+      "general_public": "minimalist_creative"
+    },
+    "by_occasion": {
+      "thesis_defense": "academic_research",
+      "group_meeting": "academic_research",
+      "strategy_review": "corporate_consulting",
+      "project_proposal": "corporate_consulting",
+      "product_launch": "tech_product",
+      "keynote_speech": "tech_product",
+      "personal_sharing": "minimalist_creative",
+      "art_talk": "minimalist_creative"
+    },
+    "by_density": {
+      "high": [
+        "academic_research"
+      ],
+      "medium": [
+        "corporate_consulting"
+      ],
+      "low": [
+        "tech_product",
+        "minimalist_creative"
+      ]
+    }
+  }
+}

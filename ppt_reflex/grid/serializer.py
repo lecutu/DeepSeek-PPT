@@ -450,12 +450,18 @@ def _render_payload(slide, x: float, y: float, w: float, h: float,
         shape = slide.shapes.add_textbox(Pt(x), Pt(y), Pt(w), Pt(h))
         tf = shape.text_frame
 
-    from pptx.enum.text import MSO_AUTO_SIZE
+    from pptx.enum.text import MSO_AUTO_SIZE, MSO_ANCHOR
     tf.word_wrap = True
     # Always grow to fit text — engine pre-checks produce diagnostics for overflow.
     # Without this, text silently clips below the allocated height when estimates are off
     # by even a few percent (CJK width factors, font metrics variance).
     tf.auto_size = MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT
+    # 形状内文字垂直居中（圆形数字 / 流程图节点 / 品牌标）
+    if p.shape_id:
+        try:
+            tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+        except Exception:
+            pass
 
     # Margins
     pad = Pt(12) if is_code else Pt(6)

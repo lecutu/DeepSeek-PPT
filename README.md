@@ -3,6 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-46%20passing-brightgreen.svg)](ppt_reflex/grid/tests/)
+[![Claude Code Skill](https://img.shields.io/badge/claude--code-skill-blue.svg)](https://github.com/topics/claude-code-skill)
 [![Built for DeepSeek](https://img.shields.io/badge/built%20for-DeepSeek-536DFE.svg)](https://platform.deepseek.com/)
 [![LLMs: Claude, GPT, Gemini](https://img.shields.io/badge/LLMs-Claude%20%7C%20GPT%20%7C%20Gemini-8e44ad.svg)]()
 

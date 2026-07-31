@@ -102,6 +102,49 @@ print(f"Errors: {len(errs)}")  # Should be 0
 
 ---
 
+## 美学宪法 — Agent 每次生成前必须过 ⭐
+
+> 来源：`D:\文献搜索员\ppt-design-research.md` — Anthropic/医学/神经科学实测 + guizang Swiss 逆向。
+> 引擎已把下列规则编译成 `anti_ai_rules` 检查（见 themes.json）。这里管 Agent 的手。
+
+### ① 配色铁律
+
+1. **禁自造 RGB。** 配色只从 theme 自带 `palettes` 里选（见 PPTBuilder Init），或手动传 `palette="deepsea_brick"`。
+2. **单 accent。** 1 surface + 1 accent + 1 text = 3 色上限。accent 只做装饰/KPI/连线。
+3. **60-30-10。** accent 面积 ≤ 画面的 10-15%。金/橙色超 20% = 暴发户，不是奢华。
+4. **深底禁纯黑** `(0,0,0)`、**浅底禁纯白** `(255,255,255)`。用 `#0B0D10`~`#1C1C1C` 或 `#F5F0EB`~`#FAFAF8`。
+5. **卡面用 surface 色**，不是 accent 色。卡是信息容器，不是装饰。
+
+### ② 布局铁律
+
+1. **禁止所有页同一布局。** 引擎检查 `no_same_layout_all_slides`。10 种布局轮换：
+   - `title_hero` 封面大字 / `title_left_right` 左文右图 / `title_right_left` 左图右文
+   - `title_3col` 三列卡 / `title_2x2` 四象限 / `title_banner` 顶部全宽
+   - `title_list_deco` 左列表右装饰 / `title_big_number` 大字KPI / `title_code` 代码+说明 / `title_closing` 全幅大字
+2. **留白 ≥ 35%。** 内容占 60-65%，装饰 ≤ 15%。
+3. **构图遵循视觉重量：** 左上→右下阅读路径。重要信息放左上象限。
+
+### ③ 形状铁律
+
+1. **每页 1-2 个大形状做主角**（占画面 8-15%）。引擎检查 `shape_size_anchor_rule`。
+2. **禁碎形状堆砌。** 3+ 个 <5% 的小形状 = 噪音。要么做大，要么删掉。
+3. **形状必须语义化** — 和内容有关，不是占版面：
+   - 架构/层级 → 嵌套结构 / 三层矩形
+   - 流程 → 箭头 / 时间轴
+   - 熔断/保护 → 盾形 / 闸门
+   - 问题/缺口 → 破碎 / 缺口形态
+4. **家族统一。** 全 deck 一个几何家族：多边形系（hexagon/diamond/triangle）或圆润系（oval/pie/donut），不混搭。引擎检查 `shape_family_consistency`。
+5. **颜色处理：** accent 纯色填充做锚点；surface 色做衬底；禁高饱和×高饱和同页。
+
+### ④ 文字铁律
+
+1. **禁 em-dash（—）**。用逗号/句号/冒号。引擎检查 `no_em_dash_in_copy`。
+2. **禁 "01 / 02" 章节序号 eyebrow**。引擎检查 `no_section_number_eyebrow`。
+3. **禁版本号**（v0.2.0 / version 2）。引擎检查 `no_version_label_in_hero`。
+4. **标题越大越细，正文越小越粗**（Swiss 字重阶梯）。大标题用 Light 200-300，正文用 Regular 400-500。
+
+---
+
 ## PPTBuilder API Reference
 
 ### Init
@@ -109,7 +152,32 @@ print(f"Errors: {len(errs)}")  # Should be 0
 ```python
 from ppt_reflex.builder import PPTBuilder
 b = PPTBuilder(template="minimal", style="tech_dark")
+
+# 自定义配色 — 模板外任意色
+b = PPTBuilder(template="minimal", style="tech_dark",
+               overrides={"bg_hex": "000000", "accent_hex": "FF6B35",
+                          "title_font": "Arial", "body_size": 24})
+# overrides 在 style 之后生效，可覆盖 TemplateProfile 任意字段
 ```
+
+### Theme palette — 一行定配色（禁自造 RGB）
+
+`theme="..."` 的每个 theme 内置 2-4 套研究验证的 palette。想换配色，**传 palette 名字而不是手写颜色**：
+
+```python
+b = PPTBuilder(theme="tech_product", palette="deepsea_brick")   # 深海蓝×赭橙
+b = PPTBuilder(theme="tech_product", palette="klein_blue")       # 克莱因蓝
+b = PPTBuilder(theme="tech_product", palette="safety_orange")    # 安全橙
+b = PPTBuilder(theme="tech_product", palette="lemon_green")      # 柠檬绿
+
+b = PPTBuilder(theme="academic_research", palette="anthropic_ivory")  # 暖米白×赭橙
+b = PPTBuilder(theme="academic_research", palette="med_blue_white")   # 医学蓝白
+
+b = PPTBuilder(theme="corporate_consulting", palette="consult_navy_brick")
+b = PPTBuilder(theme="minimalist_creative", palette="lemon_yellow")
+```
+
+可用 palette 列表（每 theme 的 `palettes` 字段）：`deepsea_brick` / `klein_blue` / `safety_orange` / `lemon_green` / `anthropic_ivory` / `med_blue_white` / `consult_navy_brick` / `consult_blue` / `lemon_yellow` / `klein_blue_light`。
 
 ### Templates
 
@@ -415,6 +483,16 @@ print(r["summary"])
 
 **If ≥3 questions are NO → you're cheating. Add content, then re-check.**
 
+**美学自检 — 生成前每页过一遍：**
+```
+① 每页有 1-2 个大形状做视觉主角（≥8% 画面）？   [ ]
+② 形状有语义（和内容相关），不是随手占版面？     [ ]
+③ 形状家族全 deck 统一（多边形 or 圆润）？       [ ]
+④ accent 色只用 1 个，面积 ≤ 15%？              [ ]
+⑤ 布局和前一页不同（不是所有页同构）？          [ ]
+⑥ 留白 ≥ 35%（内容不贴边）？                    [ ]
+```
+
 Also verify mechanically:
 ```python
 n_slides = len(b._slides)
@@ -434,4 +512,4 @@ print(f"Slides: {n_slides}, Elements: {n_elements}, Shapes: {n_shapes}, Boxes: {
 4. **Do NOT add captions to images.** `caption=""` or omit.
 5. **Do NOT mix light-bg templates with dark-bg styles.** `product` template ONLY with `tech_dark` style.
 6. **Do NOT use 50pt header regions for titles.** Minimum 60pt.
-7. **Do NOT modify this SKILL.md.**
+7. **Do NOT self-author palette colors.** Use theme's `palettes` or explicit overrides from the 美学宪法 ①.

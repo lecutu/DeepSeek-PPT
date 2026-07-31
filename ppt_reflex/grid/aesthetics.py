@@ -140,13 +140,21 @@ class AestheticsEngine:
         if e.text.strip():
             try:
                 Lt2 = luminance_L(hex_to_rgb(e.font_color))
+                # 深色填充上的浅字 = 预期设计（形状内文字/深卡白字），不算 pure_white
+                on_dark_fill = False
+                if e.fill_color:
+                    try:
+                        on_dark_fill = luminance_L(hex_to_rgb(e.fill_color)) < 60
+                    except Exception:
+                        on_dark_fill = False
                 if Lt2 < 5:
                     v.append(self._violation("near_black_text", "style", "P1", Verdict.WARN, e.id,
                         f"Near-black text (L*={Lt2:.0f})", {"L": round(Lt2)}))
-                if Lt2 > 98:
+                elif Lt2 > 98 and not on_dark_fill:
                     v.append(self._violation("pure_white_text", "style", "P1", Verdict.WARN, e.id,
                         f"Pure-white text (L*={Lt2:.0f})", {"L": round(Lt2)}))
-            except: pass
+            except Exception:
+                pass
         if all_elements:
             colors = set()
             for el in all_elements:

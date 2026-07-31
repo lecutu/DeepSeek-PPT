@@ -1,32 +1,30 @@
 ﻿"""
 ppt_reflex/builder.py — Sole AI entry point. All engine capabilities exposed here, pure interface zero engine concepts.
 
-from ppt_reflex.builder import PPTBuilder, load_style_presets, save_style_presets, list_style_presets, list_archetypes, get_archetype
+from ppt_reflex.builder import PPTBuilder, load_style_presets, save_style_presets, list_style_presets, list_archetypes, get_archetype, list_themes
 from ppt_reflex.grid.templates import list_templates
 
 # Agent workflow: browse lightweight catalogs → user picks → builder loads only what's needed
 
+print(list_themes())          # [{id, display_name, mood, density}, ...]                 — 4 themes
 print(list_templates())       # [{id, name, description, bg_hex, accent_hex, ...}, ...] — 6 entries
 print(list_style_presets())   # [{id, display_name, mood, theme}, ...]                   — 6 entries
 print(list_archetypes())      # [{id, name, description, guide}, ...]                    — 12 entries
 
-# User picks → builder instantiates ONLY the chosen template + style:
-builder = PPTBuilder(template="academic", style="academic_rigorous")
-# ^ get_template("academic") instantiates ONE TemplateProfile (cached after first access)
-# ^ _load_single_style_preset("academic_rigorous") reads JSON but discards other 5 presets
-# ^ overrides={"bg_hex": "#000", "accent_hex": "#F00"} for arbitrary color/font override
+# Option A: One theme → all aesthetics resolved
+builder = PPTBuilder(theme="corporate_consulting")
+# ^ theme auto-expands to template="business", style="corporate_minimal",
+#   spacing, typography scale, decoration policy, anti-AI rules
+
+# Option B: Manual — template + style + overrides (backward-compatible)
+builder = PPTBuilder(template="academic", style="academic_rigorous",
+                     overrides={"bg_hex": "#000", "accent_hex": "#F00"})
 
 builder.add_slide("Cover",
     regions=[("r1", 100,80,760,380)],
     elements=[builder.title("Title"), builder.text("Body", style="Body")],
 )
 result = builder.build("out.pptx")
-
-# Style preset management (for config editing, not for generation)
-presets = load_style_presets()           # read full config — use this to edit
-p = presets["academic_rigorous"]         # get one preset
-p["color_override"]["bg"] = "#FFFDF5"    # change background
-save_style_presets(presets)              # persist
 """
 
 from __future__ import annotations
@@ -46,8 +44,40 @@ from ppt_reflex.diff_log import DiffLog  # snapshot-based mutation trace, sessio
 from ppt_reflex.roundtrip_check import check_overflow  # reopen saved PPTX and verify text fits
 from ppt_reflex.color_triangulator import check_slide as tri_check_slide  # bg↔text↔fill color triangle
 
-# ── Style presets path ──
+# ── Paths ──
 _PRESETS_PATH = os.path.join(os.path.dirname(__file__), "style_presets.json")
+_THEMES_PATH = os.path.join(os.path.dirname(__file__), "themes.json")
+
+
+def _ensure_writable_path(path: str) -> str:
+    """If the target file is write-locked (open in PowerPoint/WPS), write to a _N
+    suffix instead of failing with PermissionError. Returns the actual path used."""
+    if not os.path.exists(path):
+        return path
+    try:
+        with open(path, "r+b"):
+            return path
+    except (PermissionError, OSError):
+        stem, ext = os.path.splitext(path)
+        n = 1
+        while True:
+            cand = f"{stem}_{n}{ext}"
+            if not os.path.exists(cand):
+                return cand
+            try:
+                with open(cand, "r+b"):
+                    n += 1
+            except (PermissionError, OSError):
+                n += 1
+
+
+def _find_region_height(plan, pe) -> float | None:
+    """Return the height of the region that owns element pe, or None."""
+    for region in plan.regions:
+        if pe.elem_id in region.elements:
+            return region.h
+    return None
+
 
 
 def load_style_presets() -> dict:
@@ -72,12 +102,42 @@ def list_style_presets() -> list[dict]:
 
 
 def _load_single_style_preset(style_id: str) -> dict | None:
-    """Load ONLY one style preset from JSON — reads the file but discards all other presets.
-
-    Avoids loading full 6-preset JSON into LLM context. Returns the single preset dict or None.
-    """
+    """Load ONLY one style preset from JSON — reads the file but discards all other presets."""
     data = load_style_presets()
     return data.get("presets", {}).get(style_id)
+
+
+# ── Theme system — one entry point, all aesthetics resolved ──
+
+def load_themes() -> dict:
+    """Read themes.json. Returns full dict with _meta + themes."""
+    with open(_THEMES_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def list_themes() -> list[dict]:
+    """Lightweight theme catalog for AI browsing."""
+    data = load_themes()
+    return [
+        {
+            "id": tid,
+            "display_name": t["display_name"],
+            "description": t["description"],
+            "mood": t["mood"],
+            "density": next((k for k, v in data.get("selection_guide", {}).get("by_density", {}).items()
+                            if tid in v), "medium"),
+            "template": t["template"],
+            "style": t["style"],
+            "decoration": t.get("decoration_policy", {}).get("type", "none"),
+        }
+        for tid, t in data.get("themes", {}).items()
+    ]
+
+
+def _load_theme(theme_id: str) -> dict | None:
+    """Load a single theme — returns dict with all resolved aesthetics."""
+    data = load_themes()
+    return data.get("themes", {}).get(theme_id)
 
 
 # ── WCAG luminance ──
@@ -146,6 +206,9 @@ class _Spec:
     allow_shrink: bool = False
     allow_wrap: bool = False
     arrow_slot: float = 48.0
+    # shape() 文字参数 override — 不建新 style，直接压过解析值
+    font_size_override: float|None = None
+    font_color_override: tuple|None = None
     # P1-② table data — passed through _Spec → Phase1Element → render
     table_headers: list[str] = field(default_factory=list)
     table_rows: list[list[str]] = field(default_factory=list)
@@ -170,12 +233,28 @@ class _Slide:
 
 
 class PPTBuilder:
-    """Sole AI entry point. add_slide -> build. Engine + templates fully transparent."""
+    """Sole AI entry point. add_slide -> build. Engine + templates fully transparent.
+
+    Theme-first init: PPTBuilder(theme="corporate_consulting") auto-expands to
+    template + style + spacing + typography + decoration + anti-AI rules.
+    """
 
     def __init__(self, template: str = "academic", style: str|None = None,
+                 theme: str|None = None,
                  overrides: dict|None = None,
                  page_w: float = 960, page_h: float = 540,
-                 template_pptx: str|None = None):
+                 template_pptx: str|None = None,
+                 palette: str|None = None):
+        # Theme auto-expansion: if theme is given, it sets template + style + spacing + ...
+        self._theme: dict|None = None
+        if theme:
+            self._theme = _load_theme(theme)
+            if self._theme:
+                template = self._theme.get("template", template)
+                style = self._theme.get("style", style)
+            else:
+                print(f"[PPTBuilder] WARNING: theme '{theme}' not found, falling back to defaults")
+
         # Template: lazy — only this one gets instantiated
         self._t: TemplateProfile = get_template(template)
         self._style_preset: dict|None = None
@@ -196,8 +275,37 @@ class PPTBuilder:
 
         if style:
             self._apply_style(style)
+
+        # Theme override: spacing + typography take priority over template defaults
+        if self._theme:
+            self._apply_theme_spacing()
+            self._apply_theme_typography()
+
         if overrides:
             self._t = self._t.override(**overrides)
+
+        # Palette: named color scheme from theme — applied AFTER style + overrides
+        # so an explicit palette wins. RGB from palette JSON override the theme defaults.
+        if palette and self._theme:
+            pals = self._theme.get("palettes", [])
+            match = next((p for p in pals if p.get("id") == palette), None)
+            if match:
+                over = {}
+                if "bg" in match:
+                    over["bg_hex"] = match["bg"]
+                if "accent" in match:
+                    over["accent_hex"] = match["accent"]
+                if "surface" in match:
+                    over["dim_hex"] = match["surface"]
+                if "text_primary" in match:
+                    over["text_hex"] = match["text_primary"]
+                    over["title_hex"] = match["text_primary"]
+                if "text_secondary" in match:
+                    over["gray_hex"] = match["text_secondary"]
+                if over:
+                    self._t = self._t.override(**over)
+            else:
+                print(f"[PPTBuilder] WARNING: palette '{palette}' not found in theme, ignoring")
 
     def set_intent_scope(self, scope: dict):
         """Agent-declared intent scope: {"slide_ids":[2,3], "elem_ids":["box_3"]}.
@@ -228,6 +336,69 @@ class PPTBuilder:
         self._t = self._t.override(**overrides)
         self._style_body_font = fo.get("body_font")
         self._image_layout = preset.get("image_layout", None)
+
+    def _apply_theme_spacing(self) -> None:
+        """Apply theme spacing overrides to TemplateProfile. Style preset values are
+        already applied before this point — theme spacing takes final priority."""
+        if not self._theme:
+            return
+        sp = self._theme.get("spacing", {})
+        overrides = {}
+        if "page_margin_pt" in sp:
+            overrides["page_margin"] = sp["page_margin_pt"]
+        if "line_spacing" in sp:
+            overrides["line_spacing"] = sp["line_spacing"]
+        # content_inset_pt → set as default content_inset; regions can override
+        if overrides:
+            self._t = self._t.override(**overrides)
+
+    def _apply_theme_typography(self) -> None:
+        """Apply theme typography scale — stored on builder for _resolve_style() to
+        look up per-style role. TemplateProfile title_size/body_size are the defaults;
+        theme typography map overrides them when a specific role matches."""
+        if not self._theme:
+            return
+        self._theme_typo = self._theme.get("typography", {})
+
+    def _theme_typo_for(self, style_name: str, fallback_key: str = "body") -> dict | None:
+        """Get theme typography entry for a given style_name (Heading/Body/Caption/etc.).
+        Maps style names to theme typography keys: Heading→title, Subtitle→subtitle,
+        Body→body, Caption→caption, Footer→reference."""
+        if not getattr(self, '_theme_typo', None):
+            return None
+        t = self._theme_typo
+        mapping = {
+            "Heading": "title",
+            "Subtitle": "subtitle",
+            "Body": "body",
+            "Caption": "caption",
+            "Footer": "reference",
+            "ListItem": "body",
+            "Subheading": "sub_header",
+            "Emphasis": "key_number",
+        }
+        key = mapping.get(style_name, fallback_key)
+        return t.get(key, t.get(fallback_key))
+
+    @property
+    def decoration_policy(self) -> dict | None:
+        """Return theme decoration policy if available."""
+        if self._theme:
+            return self._theme.get("decoration_policy")
+        return None
+
+    def _swiss_no_rounding(self) -> bool:
+        """True when theme's swiss block says no_rounding (Swiss style = right angles)."""
+        if self._theme:
+            return bool(self._theme.get("swiss", {}).get("no_rounding", False))
+        return False
+
+    @property
+    def anti_ai_rules(self) -> list[str]:
+        """Return theme anti-AI rules if available, else empty list."""
+        if self._theme:
+            return self._theme.get("anti_ai_rules", [])
+        return []
 
     # ── slide ──
     def add_slide(self, title: str = "", *, archetype: str|None = None,
@@ -283,7 +454,38 @@ class PPTBuilder:
         self._slides.append(_Slide(title, resolved_regions, routed_elements, arrows or [],
                                    archetype_id=arch.id if arch else ""))
         self._pipeline_cache.pop(len(self._slides) - 1, None)  # invalidate new slide slot
+        self._warn_small_header(resolved_regions, routed_elements)
         return len(self._slides) - 1
+
+    def _warn_small_header(self, regions: list, elements: list) -> None:
+        """P1: if a title lives in a region too short for its font, warn at declaration
+        time instead of failing at freeze. Saves a build cycle."""
+        try:
+            title_specs = [e for e in elements
+                           if getattr(e, 'style', '') in ('Heading', 'Subheading')]
+            if not title_specs or not regions:
+                return
+            for e in title_specs:
+                region = next((r for r in regions if r[0] == e.region), None)
+                if not region:
+                    continue
+                region_h = region[4]
+                fs = getattr(e, 'font_size', None) or self._title_pt_for(e.style)
+                ls = self._theme.get('spacing', {}).get('line_spacing', 1.4) if self._theme else 1.4
+                min_h = fs * ls * 1.15 + 10
+                if region_h < min_h:
+                    print(f"[PPTBuilder] WARN: region '{e.region}' height {region_h}pt < "
+                          f"title needs ~{min_h:.0f}pt (font {fs}pt × {ls} line-spacing). "
+                          f"Bump the region height before build to avoid overflow.")
+        except Exception:
+            pass
+
+    def _title_pt_for(self, style: str) -> float:
+        if self._theme and self._theme.get('typography'):
+            role = {'Heading': 'title', 'Subheading': 'subtitle'}.get(style, 'title')
+            t = self._theme['typography'].get(role, {})
+            return float(t.get('size_pt', 28))
+        return 28.0
 
     @staticmethod
     def _elem_type(e: _Spec) -> str:
@@ -391,8 +593,7 @@ class PPTBuilder:
                 diags.append(_diag(slide_idx, "2", None, kind="arrow_occlusion",
                                    severity="warning", deco_id=d.deco_id, message=w))
 
-        for ci in global_composition_check(plan):
-            diags.append(_diag(slide_idx, "2.5", None, kind=ci.get("category","composition"),
+        for ci in global_composition_check(plan, self._theme):            diags.append(_diag(slide_idx, "2.5", None, kind=ci.get("category","composition"),
                                severity=ci.get("level","info"), message=ci.get("message","")))
 
         ae_diags = self._run_aesthetics(c, plan)
@@ -437,7 +638,8 @@ class PPTBuilder:
                                elem_id=adv.get("owner_id",""), message=adv.get("detail","")))
 
         if prs is not None:
-            _render_slide(prs, c, self._t, slide_index=slide_idx, total_slides=len(self._slides))
+            _render_slide(prs, c, self._t, slide_index=slide_idx, total_slides=len(self._slides),
+                          theme=self._theme)
         self.diff_log.snap_after(plan, slide_idx)
 
         errs = [d for d in diags if d.get("severity") in ("error",)]
@@ -574,8 +776,7 @@ class PPTBuilder:
                                        deco_id=d.deco_id, message=w))
 
             # Phase 2.5: global composition check
-            for ci in global_composition_check(plan):
-                diags.append(_diag(i, "2.5", None, kind=ci.get("category","composition"),
+            for ci in global_composition_check(plan, self._theme):                diags.append(_diag(i, "2.5", None, kind=ci.get("category","composition"),
                                    severity=ci.get("level","info"), message=ci.get("message","")))
 
             ae_diags = self._run_aesthetics(c, plan)
@@ -628,12 +829,22 @@ class PPTBuilder:
                 )
                 for iss in issues:
                     severity = "warning" if pe.content_type == ContentType.TEXTBOX else iss["level"]
+                    region_h = _find_region_height(plan, pe)
                     diags.append({
                         "slide": i, "phase": "freeze",
                         "kind": iss["kind"],
                         "severity": severity,
                         "elem_id": pe.elem_id,
                         "message": iss["message"],
+                        # P1: geometry context — AI can see if it's a region-size vs text-volume problem
+                        "text_height_pt": round(iss.get("rendered_h", 0), 1),
+                        "box_height_pt": round(iss.get("box_h", 0), 1),
+                        "overflow_pt": round(iss.get("overflow_pt", 0), 1),
+                        "region_height_pt": region_h,
+                        "recommended_region_h": round((iss.get("rendered_h", 0) + 12), 1) if iss.get("rendered_h") else None,
+                        "font_size": iss.get("font_size"),
+                        "line_count": iss.get("line_count"),
+                        "options": iss.get("options", []),
                     })
 
             # Fix #9: pre_commit_validation — bounds/overflow/role conflicts
@@ -649,14 +860,19 @@ class PPTBuilder:
                                    elem_id=adv.get("owner_id",""), message=adv.get("detail","")))
 
             # Fix #2: Render with smart layout selection
-            _render_slide(prs, c, self._t, slide_index=i, total_slides=total_slides)
+            _render_slide(prs, c, self._t, slide_index=i, total_slides=total_slides,
+                          theme=self._theme)
 
             # DiffLog: snap_after (exit — diff sees only net change, engine loop noise folded away)
             self.diff_log.snap_after(plan, i)
 
             all_diags.extend(diags)
 
+        orig_path = path
+        path = _ensure_writable_path(path)
         prs.save(path)
+        if path != orig_path:
+            print(f"[PPTBuilder] WARNING: '{orig_path}' is locked (open in PowerPoint/WPS) — wrote to '{path}'")
         errs = [d for d in all_diags if d.get("severity") in ("error",)]
         warns = [d for d in all_diags if d.get("severity") in ("warning","warn")]
 
@@ -716,6 +932,123 @@ class PPTBuilder:
         """User confirmed deck is done — wipe mutation trace."""
         self.diff_log.clear()
 
+    # ── P0: verify() — post-render structural verification ──
+
+    def verify(self, path: str) -> dict:
+        """Reopen a generated PPTX and verify structural integrity without needing to
+        view it. Returns per-slide metrics an AI can act on:
+          - decoration presence (frame/rail/bar/dot actually drawn)
+          - element counts & overlap
+          - content coverage (whitespace proxy)
+          - page number sanity
+        No visual model needed — pure geometry from the saved file.
+        """
+        from pptx import Presentation
+        from pptx.util import Emu
+
+        if not os.path.exists(path):
+            return {"ok": False, "error": f"file not found: {path}", "slides": []}
+
+        prs = Presentation(path)
+        page_w = prs.slide_width / Emu(1)
+        page_h = prs.slide_height / Emu(1)
+        slides_out = []
+
+        for i, slide in enumerate(prs.slides):
+            shapes = list(slide.shapes)
+            full_w = prs.slide_width
+            borders = [s for s in shapes if s.width == full_w
+                       and s.height < Emu(400000)]  # full-width thin band
+            has_top = any(s.top < Emu(200000) for s in borders)
+            has_bottom = any(s.top > prs.slide_height - Emu(400000) for s in borders)
+
+            texts = [s for s in shapes if s.has_text_frame]
+            text_chars = sum(len(s.text_frame.text) for s in texts)
+
+            # coverage: non-background shapes (exclude full-width borders which are bg-like)
+            content = [s for s in shapes if not (s.width == full_w and s.height < Emu(400000))]
+            cov = min(1.0, sum((s.width / Emu(1)) * (s.height / Emu(1))
+                               for s in content) / (page_w * page_h))
+
+            # ── 形状双向检测 ──
+            # 正向: 形状内文字是否水平+垂直居中 (shape → text)
+            # 反向: 自由 textbox 中心是否落在某形状内 (text → shape 归属)
+            from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+            shape_cells = []      # 形状内文字验证结果
+            orphan_texts = []     # 反向: 不在任何形状内的文字
+
+            for s in shapes:
+                if not s.has_text_frame:
+                    continue
+                t = s.text_frame.text.strip()
+                if not t:
+                    continue
+                # 判断是否带 fill 的形状 (非纯 textbox)
+                has_fill = False
+                try:
+                    if s.fill.type is not None:
+                        has_fill = True
+                except Exception:
+                    has_fill = False
+                if not has_fill:
+                    # 纯 textbox — 反向检测: 中心是否落在某形状内
+                    cx = (s.left + s.width / 2) / Emu(1)
+                    cy = (s.top + s.height / 2) / Emu(1)
+                    inside = False
+                    for other in shapes:
+                        if other is s or not other.has_text_frame:
+                            continue
+                        try:
+                            if other.fill.type is None:
+                                continue
+                        except Exception:
+                            continue
+                        if (other.left <= s.left + s.width / 2 <= other.left + other.width and
+                                other.top <= s.top + s.height / 2 <= other.top + other.height):
+                            inside = True
+                            break
+                    if not inside:
+                        orphan_texts.append({
+                            "text": t[:20], "x": round(cx), "y": round(cy),
+                        })
+                    continue
+
+                # 带 fill 的形状 — 正向检测居中
+                try:
+                    align_h = s.text_frame.paragraphs[0].alignment
+                    v_anchor = s.text_frame.vertical_anchor
+                    h_ok = align_h == PP_ALIGN.CENTER
+                    v_ok = v_anchor == MSO_ANCHOR.MIDDLE
+                    if h_ok and v_ok:
+                        centering = "centered"
+                    elif h_ok:
+                        centering = "v_not_centered"
+                    elif v_ok:
+                        centering = "h_not_centered"
+                    else:
+                        centering = "not_centered"
+                except Exception:
+                    centering = "unknown"
+                shape_cells.append({
+                    "text": t[:20], "centering": centering,
+                })
+
+            slides_out.append({
+                "slide": i + 1,
+                "n_shapes": len(shapes),
+                "n_text": len(texts),
+                "n_borders": len(borders),
+                "frame_top": has_top,
+                "frame_bottom": has_bottom,
+                "coverage": round(cov, 3),
+                "text_chars": text_chars,
+                "shape_cells": shape_cells,
+                "orphan_texts": orphan_texts,
+            })
+
+        return {"ok": True, "path": path, "page_w": page_w, "page_h": page_h,
+                "slides": slides_out}
+
     # ── P1-①: incremental rebuild ──
 
     def rebuild(self, changed_slides: list[int], path: str|None = None) -> dict:
@@ -753,7 +1086,8 @@ class PPTBuilder:
                 cached_h, cached_plan, cached_canvas, cached_diags = self._pipeline_cache.get(i, (None, None, None, None))
                 if cached_h == h and cached_plan is not None and cached_canvas is not None:
                     # Cache hit: reuse pipeline results, just re-render
-                    _render_slide(prs, cached_canvas, self._t, slide_index=i, total_slides=total_slides)
+                    _render_slide(prs, cached_canvas, self._t, slide_index=i, total_slides=total_slides,
+                                  theme=self._theme)
                     all_diags.extend(cached_diags or [])
                     # Update cache with fresh slide XML
                     self._pipeline_cache[i] = (h, cached_plan, cached_canvas, cached_diags)
@@ -786,8 +1120,7 @@ class PPTBuilder:
                     diags.append(_diag(i, "2", None, kind="arrow_occlusion", severity="warning",
                                        deco_id=d.deco_id, message=w))
 
-            for ci in global_composition_check(plan):
-                diags.append(_diag(i, "2.5", None, kind=ci.get("category", "composition"),
+            for ci in global_composition_check(plan, self._theme):                diags.append(_diag(i, "2.5", None, kind=ci.get("category", "composition"),
                                    severity=ci.get("level", "info"), message=ci.get("message", "")))
 
             ae_diags = self._run_aesthetics(c, plan)
@@ -852,7 +1185,8 @@ class PPTBuilder:
                 diags.append(_diag(i, "pre", None, kind="advisory", severity="info",
                                    elem_id=adv.get("owner_id", ""), message=adv.get("detail", "")))
 
-            _render_slide(prs, c, self._t, slide_index=i, total_slides=total_slides)
+            _render_slide(prs, c, self._t, slide_index=i, total_slides=total_slides,
+                          theme=self._theme)
             self.diff_log.snap_after(plan, i)
 
             # Cache pipeline results
@@ -942,14 +1276,27 @@ class PPTBuilder:
     def footer(self, text: str, region: str = "footer") -> _Spec:
         return self._s("Footer", text, region, "footer")
     def box(self, text: str, style: str = "Body", region: str = "main",
-            fill_color: tuple|None = None, shape_id: str = "rounded_rectangle",
+            fill_color: tuple|None = None, shape_id: str|None = None,
             ph: float|None = None, align_h: str = "left", allow_shrink: bool = False) -> _Spec:
+        if shape_id is None:
+            shape_id = "rectangle" if self._swiss_no_rounding() else "rounded_rectangle"
         return self._s(style, text, region, "textbox", fill_color=fill_color,
                        shape_id=shape_id, ph=ph, align_h=align_h, allow_shrink=allow_shrink)
     def shape(self, shape_id: str, region: str = "main",
-              fill_color: tuple|None = None, pw: float|None = None, ph: float|None = None) -> _Spec:
-        return _Spec(elem_id=self._nid("shape"), style="", text="", region=region,
-                     ctype="shape", fill_color=fill_color, shape_id=shape_id, pw=pw, ph=ph)
+              fill_color: tuple|None = None, pw: float|None = None, ph: float|None = None,
+              text: str = "", font_size: float|None = None,
+              font_color: tuple|None = None, align_h: str = "center") -> _Spec:
+        # 形状可承载文字（圆形数字/步骤节点/品牌标）。文字居中在形状内，无需额外文本框。
+        # text 非空 + 无 fill → 透明底形状只做文字容器（文字可自由摆放在形状上）。
+        style = "Body"
+        if text and font_size is not None:
+            style = "__shape_inline__"
+        elif text:
+            style = "Emphasis"
+        return _Spec(elem_id=self._nid("shape"), style=style, text=text, region=region,
+                     ctype="shape", fill_color=fill_color, shape_id=shape_id, pw=pw, ph=ph,
+                     align_h=align_h, font_size_override=font_size,
+                     font_color_override=font_color)
     def image(self, path: str, region: str = "main",
               pw: float|None = None, ph: float|None = None,
               fit_mode: str = "fit", allow_upscale: bool = False,
@@ -1115,6 +1462,14 @@ class PPTBuilder:
         for e in spec.elements:
             # Fix #1: resolve style from template colors
             s = self._resolve_style(e.style, e.fill_color)
+            # shape() 文字 override — 压过解析值（font_size_override / font_color_override）
+            if e.font_size_override is not None:
+                s["font_size"] = e.font_size_override
+            if e.font_color_override is not None:
+                s["font_color"] = e.font_color_override
+            # 显式 align_h 覆盖 style 默认对齐 — shape(text=...) 默认 center，确保形状内文字水平居中
+            if e.align_h and e.align_h != "left":
+                s["alignment"] = e.align_h.upper()
             ctyp = ctmap.get(e.ctype, ContentType.TEXT)
 
             # Fix #4: set ElementPayload.role based on content_type
@@ -1350,7 +1705,114 @@ def _ae_violation_to_diag(v) -> dict:
     }
 
 
-def _render_slide(prs, canvas, template, slide_index=0, total_slides=1):
+
+
+def _hex_to_rgb_tuple(hex_str: str, template) -> tuple:
+    """Parse a color token: '#RRGGBB', '_accent_', '_accent_dark_', '_ink_', or fallback to template accent."""
+    if not hex_str:
+        return (0x66, 0x66, 0x66)
+    s = hex_str.strip().lstrip("#")
+    if s.startswith("_"):
+        token = s.strip("_")
+        if token == "accent":
+            h = template.accent_hex.lstrip("#")
+            return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+        if token == "accent_dark":
+            h = template.accent_hex.lstrip("#")
+            base = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+            return tuple(max(0, int(v * 0.7)) for v in base)
+        if token == "ink":
+            return (0x0A, 0x0A, 0x0A)
+        return (0x66, 0x66, 0x66)
+    if len(s) == 6:
+        try:
+            return tuple(int(s[i:i+2], 16) for i in (0, 2, 4))
+        except ValueError:
+            return (0x66, 0x66, 0x66)
+    return (0x66, 0x66, 0x66)
+
+
+def _render_theme_decoration(slide, page_w_pt, page_h_pt, policy, template) -> None:
+    """Render theme border/rail/dot decoration. Drawn behind content.
+
+    Supported types:
+      bottom_line        — thin horizontal rule at page bottom
+      left_rail_accent   — vertical accent bar on left edge
+      bottom_accent_bar  — full-width accent strip at bottom
+      single_dot         — small dot at bottom-right corner
+      top_bottom_frame   — frame borders top+bottom (reduces visual whitespace)
+    """
+    from pptx.util import Pt
+    from pptx.dml.color import RGBColor
+    from pptx.enum.shapes import MSO_SHAPE
+
+    deco_type = policy.get("type", "none")
+    if deco_type == "none":
+        return
+
+    _RENDERED_DECO_TYPES = {"bottom_line", "left_rail_accent",
+                            "bottom_accent_bar", "single_dot", "top_bottom_frame"}
+    if deco_type not in _RENDERED_DECO_TYPES:
+        # Not silently ignored — a config that has no renderer is a bug.
+        print(f"[PPTBuilder] WARN: decoration type '{deco_type}' has no renderer! "
+              f"Add it to _render_theme_decoration.")
+        return
+
+    # P2: readability guard — frame/line thinner than 4pt is invisible on projection
+    if deco_type in ("top_bottom_frame", "bottom_line") and policy.get("width_pt", 0) < 4:
+        print(f"[PPTBuilder] WARN: {deco_type} width {policy.get('width_pt')}pt < 4pt — "
+              f"likely invisible on projection. Bump width_pt in themes.json.")
+    if deco_type == "bottom_accent_bar" and policy.get("height_pt", 0) < 8:
+        print(f"[PPTBuilder] WARN: {deco_type} height {policy.get('height_pt')}pt < 8pt — "
+              f"likely invisible on projection. Bump height_pt in themes.json.")
+
+    color = _hex_to_rgb_tuple(policy.get("color", ""), template)
+    rgb = RGBColor(*color)
+    w_pt = policy.get("width_pt", 2)
+    h_pt = policy.get("height_pt", w_pt)
+
+    if deco_type == "bottom_line":
+        sp = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
+                                    Pt(0), Pt(page_h_pt - w_pt), Pt(page_w_pt), Pt(w_pt))
+        sp.fill.solid(); sp.fill.fore_color.rgb = rgb
+        sp.line.fill.background()
+        sp.shadow.inherit = False
+
+    elif deco_type == "left_rail_accent":
+        sp = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
+                                    Pt(0), Pt(0), Pt(w_pt), Pt(page_h_pt))
+        sp.fill.solid(); sp.fill.fore_color.rgb = rgb
+        sp.line.fill.background()
+        sp.shadow.inherit = False
+
+    elif deco_type == "bottom_accent_bar":
+        sp = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
+                                    Pt(0), Pt(page_h_pt - h_pt), Pt(page_w_pt), Pt(h_pt))
+        sp.fill.solid(); sp.fill.fore_color.rgb = rgb
+        sp.line.fill.background()
+        sp.shadow.inherit = False
+
+    elif deco_type == "single_dot":
+        size = policy.get("size_pt", 6)
+        sp = slide.shapes.add_shape(MSO_SHAPE.OVAL,
+                                    Pt(page_w_pt - size - 24), Pt(page_h_pt - size - 24),
+                                    Pt(size), Pt(size))
+        sp.fill.solid(); sp.fill.fore_color.rgb = rgb
+        sp.line.fill.background()
+        sp.shadow.inherit = False
+
+    elif deco_type == "top_bottom_frame":
+        # Full-width frame: thin line at top + bottom — reduces visual whitespace
+        line_w = policy.get("width_pt", 2)
+        for y in (line_w, page_h_pt - line_w):
+            sp = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
+                                        Pt(0), Pt(y - line_w), Pt(page_w_pt), Pt(line_w))
+            sp.fill.solid(); sp.fill.fore_color.rgb = rgb
+            sp.line.fill.background()
+            sp.shadow.inherit = False
+
+
+def _render_slide(prs, canvas, template, slide_index=0, total_slides=1, theme=None):
     """Grid-to-PPT full slide render: background + info layer + decorations + page number."""
     from pptx.util import Pt, Emu
     from pptx.dml.color import RGBColor
@@ -1382,6 +1844,10 @@ def _render_slide(prs, canvas, template, slide_index=0, total_slides=1):
 
     page_w_pt = canvas.config.canvas_w_pt
     page_h_pt = canvas.config.canvas_h_pt
+
+    # Phase 0.5: theme decoration (border/rail/dot) — drawn before content so it sits behind
+    if theme and theme.get("decoration_policy"):
+        _render_theme_decoration(slide, page_w_pt, page_h_pt, theme["decoration_policy"], template)
 
     # Phase 1: information layer elements
     for pe in canvas._phase1_rects if hasattr(canvas, '_phase1_rects') else {}:
