@@ -87,6 +87,7 @@ print(f"Errors: {len(errs)}")  # Should be 0
 | `b.bullet("...")` | 13pt, no fixed box — auto-flow, never overflows |
 | `b.box("...", fill_color=DARK, style="Body")` | Box auto-expands height — no overflow |
 | `b.shape(...)` | Pure graphics, no text → no overflow possible |
+| `b.shape(..., text=..., font_size=...)` | Shape-inline text is centered H+V, fits the shape → no overflow |
 | `b.image(..., layout_mode="hero_top")` | No caption = no text overflow |
 | `b.divider(...)` | Always safe, no text |
 | `b.arrow(...)` | Always safe, decoration only |
@@ -126,15 +127,19 @@ print(f"Errors: {len(errs)}")  # Should be 0
 
 ### ③ 形状铁律
 
-1. **每页 1-2 个大形状做主角**（占画面 8-15%）。引擎检查 `shape_size_anchor_rule`。
-2. **禁碎形状堆砌。** 3+ 个 <5% 的小形状 = 噪音。要么做大，要么删掉。
-3. **形状必须语义化** — 和内容有关，不是占版面：
+1. **每页 ≤2 种形状。** 引擎检查 `shape_types_max_2`。形状是图示载体，不是填空装饰。
+2. **每页 1-2 个大形状做主角**（占画面 8-15%）。引擎检查 `shape_size_anchor_rule`。
+3. **禁碎形状堆砌。** 3+ 个 <5% 的小形状 = 噪音。要么做大，要么删掉。
+4. **形状必须语义化** — 和内容有关，不是占版面：
    - 架构/层级 → 嵌套结构 / 三层矩形
    - 流程 → 箭头 / 时间轴
    - 熔断/保护 → 盾形 / 闸门
    - 问题/缺口 → 破碎 / 缺口形态
-4. **家族统一。** 全 deck 一个几何家族：多边形系（hexagon/diamond/triangle）或圆润系（oval/pie/donut），不混搭。引擎检查 `shape_family_consistency`。
-5. **颜色处理：** accent 纯色填充做锚点；surface 色做衬底；禁高饱和×高饱和同页。
+5. **家族统一，圆润/尖锐不混搭。** 全 deck 一个几何家族：
+   - rounded 系（oval/rounded_rectangle/pie/donut/sun/plaque）与 angular 系（hexagon/diamond/triangle/chevron/star/...）**同页不混用** → 引擎检查 `shape_style_no_mix`；
+   - 全 deck 几何家族一致性 → 引擎检查 `shape_family_consistency`。
+6. **形状内文字直接承载。** 数字/步骤序号/品牌标用 `b.shape(..., text=..., font_size=...)` 放进形状里，不叠文本框。生成后可 `b.verify()` 双向检测居中（见下）。
+7. **颜色处理：** accent 纯色填充做锚点；surface 色做衬底；禁高饱和×高饱和同页。
 
 ### ④ 文字铁律
 
@@ -238,9 +243,12 @@ b.box("Card content here\n\nMultiple paragraphs OK",
       shape_id="rounded_rectangle",                      # 20 shapes available (see below)
       ph=None, align_h="left", allow_shrink=False)       # ph=override height; align_h=left|center|right
 
-# SHAPES — always safe (pure graphics)
+# SHAPES — 纯图形 或 承载文字（⭐ 形状内文字自动水平+垂直居中）
 b.shape("hexagon", region="center",                     # 20 shape IDs (see below)
-        fill_color=(34,211,238), pw=100, ph=60)         # pw/ph REQUIRED for shapes
+        fill_color=(34,211,238), pw=100, ph=60,         # pw/ph REQUIRED
+        text="PPT\nReflex", font_size=40,               # ⭐ 数字/步骤/品牌标直接放形状里
+        font_color=None, align_h="center")              # 无需额外文本框
+# text 非空 + 无 fill → 透明底形状只做文字容器（文字可自由摆放在形状上）
 
 # IMAGES — safe without caption
 b.image("path/to/img.jpg", region="hero",
@@ -279,6 +287,30 @@ Or auto-infer: `b.auto_layout_mode("img.jpg")` — picks mode from aspect ratio:
 | 0.8–1.6 (square / screenshot) | `center_float` | centered, contain-fit, NEVER cropped |
 
 **Screenshots, irregular crops, phone captures — just pass the file.** `fit_mode="fit"` is default: image fully visible, aspect ratio preserved, nothing cropped.
+
+### Verify — 形状双向检测（无需打开 PPTX）
+
+`b.verify("output.pptx")` 重开文件做纯几何检查，返回每页指标，AI 可直接行动：
+
+```python
+v = b.verify("output.pptx")
+for s in v["slides"]:
+    # 正向：带填充形状内的文字是否水平+垂直居中
+    for cell in s["shape_cells"]:
+        if cell["centering"] != "centered":
+            print(f"S{s['slide']} 形状文字未居中: {cell['text']} → {cell['centering']}")
+    # 反向：纯 textbox 中心不落在任何形状内 → 游离文字
+    for o in s["orphan_texts"]:
+        print(f"S{s['slide']} 游离文字: {o['text']} @({o['x']},{o['y']})")
+```
+
+| 字段 | 含义 |
+|:--|:--|
+| `slide / n_shapes / n_text / n_borders` | 每页计数 |
+| `frame_top / frame_bottom` | 是否有全宽细边（装饰边框） |
+| `coverage` | 内容覆盖率（留白代理，0-1） |
+| `shape_cells` | 带填充形状文字居中状态：`centered` / `h_not_centered` / `v_not_centered` / `not_centered` |
+| `orphan_texts` | 中心不在任何形状内的自由文字（位置 x/y） |
 
 ### Build + read diagnostics
 
