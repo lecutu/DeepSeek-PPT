@@ -24,8 +24,9 @@ def _estimate_width(elem, uw):
 def _estimate_height(elem, ew: float) -> float:
     payload = elem.payload
     # Images are anchor elements — if no explicit preferred_height, occupy full region height
-    # contain-fit rendering layer scales proportionally to prevent overflow
-    if elem.content_type == ContentType.IMAGE:
+    # contain-fit rendering layer scales proportionally to prevent overflow.
+    # preferred_height（含 layout_mode 约束推导值）优先于"填满剩余空间"哨兵。
+    if elem.content_type == ContentType.IMAGE and elem.preferred_height is None:
         return 9999.0  # clamped by _place_stack() min(eh, page_h - ey) to region height
     # Compute text demand height first — use SHAPE_TO_FIT_TEXT ceiling to prevent
     # render-time shape expansion from bleeding past the region boundary.
@@ -78,12 +79,15 @@ def _place_stack(elems, ux, uy, uw, uh, page_w, page_h,
     # so Phase 1 KNOWS what the render layer will need.
     demands: list[float] = []
     has_image = False
+    image_fill: list[bool] = []  # 标记"填满剩余空间"的图片（9999 哨兵）——其 stack_clipped 是假警告
     for elem in elems:
         ew = min(_estimate_width(elem, uw), uw)
         eh = _estimate_height(elem, ew)
         if eh < 0:
             eh = 24
-        if elem.content_type == ContentType.IMAGE and eh > uh:
+        is_fill = elem.content_type == ContentType.IMAGE and eh > uh
+        image_fill.append(is_fill)
+        if is_fill:
             has_image = True  # IMAGE sentinel: fill remaining space, not demand-driven
         demands.append(eh)
 
@@ -100,10 +104,18 @@ def _place_stack(elems, ux, uy, uw, uh, page_w, page_h,
         ex = ux
         if ex + ew > ux + uw + 2:
             ew = max(1.0, ux + uw - ex)
+        # align_h：元素宽小于区域宽时的水平摆放（left 默认 / center / right）
+        _ah = getattr(elem, "align_h", "left") or "left"
+        if ew < uw - 2:
+            if _ah == "center":
+                ex = ux + (uw - ew) / 2
+            elif _ah == "right":
+                ex = ux + uw - ew
         ey = max(0.0, min(cy, page_h - 1))
         h = max(1.0, min(eh, page_h - ey, uy + uh - ey))
-        # If element height is clamped by region boundary, report the shortfall
-        if h < eh - 2:
+        # If element height is clamped by region boundary, report the shortfall.
+        # 图片"填满剩余空间"哨兵（9999）不是真实需求——跳过，否则每张图都报假警告。
+        if h < eh - 2 and not image_fill[i]:
             plan.diagnostics.append(LayoutDiagnostic(
                 kind="stack_clipped", severity="warning", elem_id=elem.elem_id,
                 demand_pt=eh, usable_pt=h,

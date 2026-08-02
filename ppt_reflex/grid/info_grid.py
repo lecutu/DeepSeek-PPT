@@ -7,16 +7,10 @@ Each cell records: owner_id, content_type, z_order, locked, source.
 
 from __future__ import annotations
 from copy import deepcopy
-from .types import GridConfig, InfoCell, ContentType, ElementPayload, SemanticRole
+from .types import GridConfig, InfoCell, ContentType, ElementPayload, SemanticRole, ROLE_Z_BASE
 from .positioning import cell_name, parse_cell, bbox_to_fine_cells
 
-ROLE_Z_BASE = {
-    SemanticRole.ENTITY: 100,
-    SemanticRole.CONNECTOR: 200,
-    SemanticRole.ANNOTATION: 210,
-    SemanticRole.EMPHASIS: 220,
-    SemanticRole.BACKDROP: 0,
-}
+# ROLE_Z_BASE 单一事实源在 types.py（旧版本地副本数值已分叉：ANNOTATION 300 vs 210）
 
 
 class InformationGrid:

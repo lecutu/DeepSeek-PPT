@@ -12,18 +12,6 @@ from .types import ContentType, ElementPayload
 
 
 @dataclass
-class FeedbackBundle:
-    """Engine->AI structured feedback. Used for build_plan(feedback) callback."""
-    round: int = 0
-    blocked: bool = False
-    blocking_count: int = 0
-    warning_count: int = 0
-    force_full_relayout: bool = False
-    message: str = ""
-    diagnostics: list[dict] = field(default_factory=list)
-
-
-@dataclass
 class LayoutDiagnostic:
     """Engine->AI 'problem+suggestion'. severity=error blocks, warning does not.
     options is a menu with numeric costs — which to pick is the AI's semantic decision."""

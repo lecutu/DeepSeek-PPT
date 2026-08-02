@@ -207,7 +207,7 @@ class ImagePrompter:
         core = f"{subject}, {style}, color scheme: {color}"
 
         full = self._assemble(core, aspect, negative, prov)
-        neg_full = self._assemble_negative(negative, prov)
+        neg_full = self._assemble_negative(negative, provider)
 
         return ImagePrompt(
             subject=subject,
@@ -216,7 +216,7 @@ class ImagePrompter:
             provider=provider,
             full_prompt=full,
             negative_prompt=neg_full,
-            style_notes=f"Type: {type_cfg['Label']} | Palette: {palette['hint']}",
+            style_notes=f"Type: {type_cfg['label']} | Palette: {palette['hint']}",
             suggested_provider=self._suggest_provider(image_type),
         )
 
@@ -269,8 +269,8 @@ class ImagePrompter:
             parts.append(params)
         return " ".join(parts).strip()
 
-    def _assemble_negative(self, negative: str, prov: dict) -> str:
-        if prov.get("provider") == "dalle":
+    def _assemble_negative(self, negative: str, provider: str) -> str:
+        if provider == "dalle":
             return negative
         return f"ugly, blurry, low quality, distorted, watermark, text, logo, {negative}"
 

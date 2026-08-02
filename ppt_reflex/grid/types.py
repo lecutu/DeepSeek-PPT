@@ -264,6 +264,7 @@ class ElementPayload:
 
     # ── 文本 ──
     text: str = ""
+    style_name: str = ""        # 语义样式名（Heading/Body/Caption...）——供 composition 做层级判断
     font_size: float = 14.0
     font_color: tuple[int,int,int] = (0x22, 0x22, 0x44)
     font_bold: bool = False
@@ -282,6 +283,7 @@ class ElementPayload:
 
     # ── 形状 ──
     shape_id: str = ""
+    corner_radius_pt: float | None = None  # rounded_rectangle 圆角半径（pt），None = PPT 默认
 
     # ── P1-② 表格 ──
     table_headers: list[str] | None = None

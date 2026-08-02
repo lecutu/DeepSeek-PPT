@@ -216,77 +216,92 @@ def _clamp_bbox(x: float, y: float, w: float, h: float,
 
 # ═══════════════════════════════════════════════════════════
 # SHAPE ID MAP — ElementPayload.shape_id → python-pptx MSO_SHAPE
+# 程序化从枚举取值，禁止手抄整数（2026-08 审查发现旧表 15/20 映射
+# 错误：hexagon 曾渲染成椭圆，parallelogram 曾渲染成三角形）
 # ═══════════════════════════════════════════════════════════
 
-_SHAPE_MAP = {
-    "rectangle":            1,
-    "rounded_rectangle":    5,
-    "diamond":              4,
-    "ellipse":              9,
-    "chevron":             55,
-    "pentagon":            56,
-    "hexagon":              9,
-    "star5":               92,
-    "star8":               93,
-    "triangle":             7,
-    "right_triangle":       8,
-    "right_arrow":         33,
-    "left_arrow":          34,
-    "up_arrow":            35,
-    "down_arrow":          36,
-    "striped_right_arrow": 93,
-    "arc":                 19,
-    "moon":                20,
-    "parallelogram":        7,
-    "trapezoid":            8,
-    "plus":                11,
-    "bevel":               15,
-    "can":                 22,
-    "cube":                16,
-    "donut":               23,
-    "lightning_bolt":      22,
-    "heart":               21,
-    "cloud":               179,
-    "banner":              68,
-    "seal5":               110,
-    "seal8":               111,
-    "flowchart_process":    1,    # rectangle
-    "flowchart_decision":   4,    # diamond
-    "flowchart_data":       6,    # parallelogram
-    "flowchart_predefined": 1,    # rectangle
-    "flowchart_internal_storage": 1,
-    "flowchart_document":   1,
-    "flowchart_multidocument": 1,
-    "flowchart_terminator": 5,    # rounded rectangle
-    "flowchart_preparation": 6,   # hexagon-like
-    "flowchart_manual_input": 6,
-    "flowchart_manual_operation": 6,
-    "flowchart_connector":   9,   # circle
-    "flowchart_offpage_connector": 6,
-    "flowchart_card":        1,
-    "flowchart_punched_tape": 1,
-    "flowchart_summing_junction": 9,
-    "flowchart_or":           9,
-    "flowchart_collate":      9,
-    "flowchart_sort":         9,
-    "flowchart_extract":      9,
-    "flowchart_merge":        7,
-    "flowchart_offline_storage": 1,
-    "flowchart_online_storage": 22,
-    "flowchart_magnetic_tape": 1,
-    "flowchart_magnetic_disk": 22,
-    "flowchart_magnetic_drum": 22,
-    "flowchart_display":      1,
-    "flowchart_delay":        1,
-}
+def _build_shape_map() -> dict:
+    from pptx.enum.shapes import MSO_SHAPE as S
+    return {
+        "rectangle":            S.RECTANGLE,
+        "rounded_rectangle":    S.ROUNDED_RECTANGLE,
+        "oval":                 S.OVAL,
+        "ellipse":              S.OVAL,
+        "diamond":              S.DIAMOND,
+        "triangle":             S.ISOSCELES_TRIANGLE,
+        "right_triangle":       S.RIGHT_TRIANGLE,
+        "parallelogram":        S.PARALLELOGRAM,
+        "trapezoid":            S.TRAPEZOID,
+        "chevron":              S.CHEVRON,
+        "pentagon":             S.REGULAR_PENTAGON,   # 正五边形
+        "home":                 S.PENTAGON,           # msoShapePentagon = home-plate 形
+        "hexagon":              S.HEXAGON,
+        "cross":                S.CROSS,
+        "plus":                 S.CROSS,
+        "donut":                S.DONUT,
+        "arc":                  S.ARC,
+        "moon":                 S.MOON,
+        "sun":                  S.SUN,
+        "heart":                S.HEART,
+        "lightning_bolt":       S.LIGHTNING_BOLT,
+        "plaque":               S.PLAQUE,
+        "wave":                 S.WAVE,
+        "pie":                  S.PIE,
+        "star":                 S.STAR_5_POINT,
+        "star5":                S.STAR_5_POINT,
+        "star8":                S.STAR_8_POINT,
+        "right_arrow":          S.RIGHT_ARROW,
+        "left_arrow":           S.LEFT_ARROW,
+        "up_arrow":             S.UP_ARROW,
+        "down_arrow":           S.DOWN_ARROW,
+        "left_right_arrow":     S.LEFT_RIGHT_ARROW,
+        "up_down_arrow":        S.UP_DOWN_ARROW,
+        "striped_right_arrow":  S.STRIPED_RIGHT_ARROW,
+        "bevel":                S.BEVEL,
+        "can":                  S.CAN,
+        "cube":                 S.CUBE,
+        "cloud":                S.CLOUD,
+        "banner":               S.CURVED_DOWN_RIBBON,
+        "star_seal8":           S.STAR_8_POINT,
+        "flowchart_process":    S.FLOWCHART_PROCESS,
+        "flowchart_decision":   S.FLOWCHART_DECISION,
+        "flowchart_data":       S.FLOWCHART_DATA,
+        "flowchart_predefined": S.FLOWCHART_PREDEFINED_PROCESS,
+        "flowchart_document":   S.FLOWCHART_DOCUMENT,
+        "flowchart_multidocument": S.FLOWCHART_MULTIDOCUMENT,
+        "flowchart_terminator": S.FLOWCHART_TERMINATOR,
+        "flowchart_preparation": S.FLOWCHART_PREPARATION,
+        "flowchart_manual_input": S.FLOWCHART_MANUAL_INPUT,
+        "flowchart_manual_operation": S.FLOWCHART_MANUAL_OPERATION,
+        "flowchart_connector":  S.FLOWCHART_CONNECTOR,
+        "flowchart_offpage_connector": S.FLOWCHART_OFFPAGE_CONNECTOR,
+        "flowchart_card":       S.FLOWCHART_CARD,
+        "flowchart_punched_tape": S.FLOWCHART_PUNCHED_TAPE,
+        "flowchart_summing_junction": S.FLOWCHART_SUMMING_JUNCTION,
+        "flowchart_or":         S.FLOWCHART_OR,
+        "flowchart_collate":    S.FLOWCHART_COLLATE,
+        "flowchart_sort":       S.FLOWCHART_SORT,
+        "flowchart_extract":    S.FLOWCHART_EXTRACT,
+        "flowchart_merge":      S.FLOWCHART_MERGE,
+        "flowchart_internal_storage": S.FLOWCHART_INTERNAL_STORAGE,
+        "flowchart_offline_storage": S.FLOWCHART_OFFLINE_STORAGE,
+        "flowchart_stored_data": S.FLOWCHART_STORED_DATA,
+        "flowchart_magnetic_tape": S.FLOWCHART_SEQUENTIAL_ACCESS_STORAGE,
+        "flowchart_magnetic_disk": S.FLOWCHART_MAGNETIC_DISK,
+        "flowchart_magnetic_drum": S.FLOWCHART_DIRECT_ACCESS_STORAGE,
+        "flowchart_display":    S.FLOWCHART_DISPLAY,
+        "flowchart_delay":      S.FLOWCHART_DELAY,
+    }
+
+_SHAPE_MAP = _build_shape_map()
 
 
-def _lookup_shape(shape_id: str) -> int:
-    """Map human-readable shape_id to python-pptx MSO_SHAPE integer.
+def _lookup_shape(shape_id: str):
+    """Map human-readable shape_id to python-pptx MSO_SHAPE enum member.
 
-    Returns 1 (rectangle) for unknown keys.
+    Returns MSO_SHAPE.RECTANGLE for unknown keys.
     """
-    return _SHAPE_MAP.get(shape_id.lower(), 1)
+    return _SHAPE_MAP.get(shape_id.lower(), _SHAPE_MAP["rectangle"])
 
 
 # ═══════════════════════════════════════════════════════════
@@ -445,6 +460,15 @@ def _render_payload(slide, x: float, y: float, w: float, h: float,
             shape.fill.solid()
             shape.fill.fore_color.rgb = RGBColor(*p.fill_color)
         shape.line.fill.background()
+        # 圆角半径（pt → adjustment 比例）：来自 style preset shape_override / template.card_rounding
+        if p.shape_id == "rounded_rectangle":
+            radius_pt = getattr(p, "corner_radius_pt", None)
+            if radius_pt:
+                try:
+                    adj = max(0.0, min(0.5, radius_pt / max(1.0, min(w, h))))
+                    shape.adjustments[0] = adj
+                except Exception:
+                    pass
         tf = shape.text_frame
     else:
         shape = slide.shapes.add_textbox(Pt(x), Pt(y), Pt(w), Pt(h))

@@ -151,9 +151,10 @@ def _check_font_hierarchy(plan: LayoutPlan, issues: list[dict]) -> None:
         p = e.payload
         if not p or not p.text.strip():
             continue
-        role = getattr(p, 'role', None)
-        role_name = role.name if hasattr(role, 'name') else str(role or '')
-        if 'TITLE' in role_name.upper() or 'HEADING' in role_name.upper():
+        # 用语义样式名判断（builder._s 注入 payload.style_name），
+        # 不再读恒为 None 的 p.role（2026-08 审查：旧版因此永不触发）
+        style = (getattr(p, "style_name", "") or "").lower()
+        if style in ("heading", "subtitle", "subheading"):
             titles.append((e.elem_id, p.font_size))
         else:
             bodies.append((e.elem_id, p.font_size))
@@ -395,7 +396,9 @@ def _check_anti_ai_cliches(plan: LayoutPlan, issues: list[dict],
         })
 
     # Check 3: All cards same radius → uniform, no variation
-    if _all_cards_uniform(plan):
+    # 但主题契约 cards_must_have_consistent_size 是正向要求——存在时跳过本检查，
+    # 否则"遵守主题"反而被惩罚（2026-08 审查发现的规则打架）
+    if "cards_must_have_consistent_size" not in theme_rules and _all_cards_uniform(plan):
         issues.append({
             "level": "info", "category": "anti_ai",
             "message": (
@@ -405,155 +408,18 @@ def _check_anti_ai_cliches(plan: LayoutPlan, issues: list[dict],
             "rule": "vary_card_sizes",
         })
 
-    # ── Theme-specific rule checks ──
-    if "no_gradients_or_glows" in theme_rules:
-        pass  # Engine already enforces this — no-op at composition level
-
-    if "no_rounded_cards" in theme_rules:
-        pass  # Shape choice is AI-level decision, engine can't read shape_id here
-
-    if "no_more_than_5_bullets_per_slide" in theme_rules:
-        bullet_count = sum(1 for e in elements
-                          if e.payload and e.payload.text.strip().startswith("•"))
-        if bullet_count > 5:
-            issues.append({
-                "level": "warn", "category": "anti_ai",
-                "message": f"{bullet_count} bullets on this slide — "
-                           f"corporate consulting theme recommends ≤5.",
-                "rule": "max_5_bullets",
-                "bullet_count": bullet_count,
-            })
-
-    if "text_must_be_under_30_words_per_slide" in theme_rules:
-        word_count = sum(
-            len(e.payload.text.split()) if e.payload else 0
-            for e in elements
-        )
-        if word_count > 30:
-            issues.append({
-                "level": "warn", "category": "anti_ai",
-                "message": f"{word_count} words on this slide — "
-                           f"minimalist creative theme recommends ≤30.",
-                "rule": "max_30_words",
-                "word_count": word_count,
-            })
-
-    if "no_more_than_3_elements_per_slide" in theme_rules:
-        if len(elements) > 3:
-            issues.append({
-                "level": "info", "category": "anti_ai",
-                "message": f"{len(elements)} elements on this slide — "
-                           f"minimalist creative theme prefers ≤3.",
-                "rule": "max_3_elements",
-                "element_count": len(elements),
-            })
-
-    if "no_bullet_lists_over_3_items" in theme_rules:
-        bullet_count = sum(1 for e in elements
-                          if e.payload and e.payload.text.strip().startswith("•"))
-        if bullet_count > 3:
-            issues.append({
-                "level": "warn", "category": "anti_ai",
-                "message": f"{bullet_count} bullets — tech product theme prefers ≤3. "
-                           f"Split into multiple slides or use visual alternatives.",
-                "rule": "max_3_bullets",
-                "bullet_count": bullet_count,
-            })
-
-    if "no_pure_white_or_pure_black_text" in theme_rules:
-        for e in elements:
-            p = e.payload
-            if not p or not p.text.strip():
-                continue
-            fc = getattr(p, 'font_color', None)
-            if fc in ((0, 0, 0), (0xFF, 0xFF, 0xFF)):
-                issues.append({
-                    "level": "info", "category": "anti_ai",
-                    "message": f"'{e.elem_id}' uses pure {'black' if fc == (0,0,0) else 'white'} text. "
-                               f"Use near-black (#1A1A1A) or near-white (#F0F0F0) instead.",
-                    "rule": "no_pure_black_white",
-                    "elem_id": e.elem_id,
-                })
-                break  # One warning per slide is enough
-
-    if "no_pure_black_pure_white" in theme_rules:
-        for e in elements:
-            p = e.payload
-            if not p:
-                continue
-            fc = getattr(p, 'font_color', None)
-            fill = getattr(p, 'fill_color', None)
-            if fc in ((0, 0, 0), (0xFF, 0xFF, 0xFF)):
-                clr = "black" if fc == (0, 0, 0) else "white"
-                issues.append({
-                    "level": "info", "category": "anti_ai",
-                    "message": f"'{e.elem_id}' uses pure {clr}. "
-                               f"Minimalist theme avoids extremes — use muted tones.",
-                    "rule": "no_pure_extremes",
-                    "elem_id": e.elem_id,
-                })
-                break
-
-    # Check: avoid_full_sentences_in_bullets
-    if "avoid_full_sentences_in_bullets" in theme_rules:
-        for e in elements:
-            p = e.payload
-            if not p or not p.text.strip().startswith("•"):
-                continue
-            text = p.text.lstrip("• ").strip()
-            word_count = len(text.split())
-            if word_count > 10:
-                issues.append({
-                    "level": "info", "category": "anti_ai",
-                    "message": f"Bullet '{text[:40]}...' is {word_count} words — "
-                               f"corporate style prefers keyword bullets, not full sentences.",
-                    "rule": "no_full_sentence_bullets",
-                    "elem_id": e.elem_id,
-                })
-                break
+    # ── Theme-specific rule checks — 注册表分派 ──
+    # 未注册的规则字符串不再被静默忽略：builder 在主题加载时通过
+    # unimplemented_rules() 显式报告（消灭拼写漂移，如
+    # no_gradients_or_glows vs no_gradients_or_shadows）
+    for rule in theme_rules:
+        handler = ANTI_AI_RULE_REGISTRY.get(rule)
+        if handler is None or handler == "structural":
+            continue
+        handler(plan, issues, theme)
 
     # Check: text_over_images_must_have_dark_overlay — engine can't verify this
-    # (image rendering is Phase 3), so this rule is advisory in CLAUDE.md only
-
-    # ── taste-skill port: hard-coded AI tells (all themes) ──
-
-    # Check: em-dash complete ban — the single most-cited AI tell in copy
-    if "no_em_dash_in_copy" in theme_rules:
-        _check_em_dash(plan, issues)
-
-    # Check: section-number eyebrows "01 / 02 / 03" — production-test AI tell
-    if "no_section_number_eyebrow" in theme_rules:
-        _check_section_number_eyebrow(plan, issues)
-
-    # Check: version labels in hero/footer ("v0.2.0 — ...") — fake-launch tell
-    if "no_version_label_in_hero" in theme_rules:
-        _check_version_label(plan, issues)
-
-    # Check: shape-family consistency lock — one geometric family per deck, no odd-one-out
-    if "shape_family_consistency" in theme_rules:
-        _check_shape_family(plan, issues)
-
-    # Check: single-accent lock — any fill/font outside palette breaks the 60-30-10 read
-    if "single_accent_color_lock" in theme_rules:
-        _check_single_accent(plan, issues, theme_rules)
-
-    # ── research-driven additions ──
-
-    # Check: accent coverage — accent color must be a small 5-15% accent, not 20%+ of the page
-    if "accent_coverage_max_20pct" in theme_rules:
-        _check_accent_coverage(plan, issues, theme)
-
-    # Check: at least one large shape anchors the slide (no scattered fragments)
-    if "shape_size_anchor_rule" in theme_rules:
-        _check_shape_anchor(plan, issues)
-
-    # Check: ≤2 distinct shape types per slide — 3+ reads as visual noise (iSlide shape law #1)
-    if "shape_types_max_2" in theme_rules:
-        _check_shape_types_limit(plan, issues)
-
-    # Check: rounded + angular shapes never mix on one slide (iSlide shape law #2)
-    if "shape_style_no_mix" in theme_rules:
-        _check_shape_style_mix(plan, issues)
+    # (image rendering is Phase 3), so this rule is reported as unimplemented
 
 
 # ── taste-skill port helpers ──
@@ -668,12 +534,15 @@ def _check_shape_types_limit(plan: LayoutPlan, issues: list[dict]) -> None:
         })
 
 
-def _check_shape_style_mix(plan: LayoutPlan, issues: list[dict]) -> None:
-    """iSlide shape law #2: rounded + angular shapes never mix on one slide."""
+def _check_shape_style_mix(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """iSlide shape law #2: rounded + angular shapes never mix on one slide.
+    rectangle 视为中性衬底（divider/底色条），不计入 angular——
+    否则 box()(rounded) + divider()(rectangle) 的默认用法必然误报（2026-08 审查）。"""
     rounded = [e for e in plan.elements
                if e.payload and (e.payload.shape_id or "") in _ROUNDED_SHAPES]
     angular = [e for e in plan.elements
-               if e.payload and (e.payload.shape_id or "") in _ANGULAR_SHAPES]
+               if e.payload and (e.payload.shape_id or "") in _ANGULAR_SHAPES
+               and (e.payload.shape_id or "") != "rectangle"]
     # 忽略 rectangle 作为 divider 衬底；纯装饰形状才计入
     if rounded and angular:
         issues.append({
@@ -685,8 +554,9 @@ def _check_shape_style_mix(plan: LayoutPlan, issues: list[dict]) -> None:
         })
 
 
-def _check_single_accent(plan: LayoutPlan, issues: list[dict], theme_rules: list[str]) -> None:
-    """Taste-skill single-accent lock — warning fires once per slide if fills look random."""
+def _check_single_accent_lock(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """Taste-skill single-accent lock — warning fires once per slide if fills look random.
+    （原名 _check_single_accent，与 :204 的主题色检查同名互相覆盖——2026-08 审查修复）"""
     fills: dict[tuple, int] = {}
     for e in plan.elements:
         p = e.payload
@@ -831,3 +701,400 @@ def _all_cards_uniform(plan: LayoutPlan) -> bool:
     w_range = max(ws) - min(ws)
     h_range = max(hs) - min(hs)
     return w_range < 10 and h_range < 10
+
+
+# ═══════════════════════════════════════════════════════════════
+# CJK-aware 词数统计 + 新检查器（2026-08 审查补齐）
+# ═══════════════════════════════════════════════════════════════
+
+def _word_count(text: str) -> int:
+    """中英文混合词数：CJK/全角字符每字算一词，拉丁按空白分词。
+    旧版 len(text.split()) 对中文整段只算 1 "词"，词数规则对中文失明。"""
+    import unicodedata
+    cjk = sum(1 for ch in text if unicodedata.east_asian_width(ch) in ("W", "F"))
+    latin = 0
+    for tok in text.split():
+        if not all(unicodedata.east_asian_width(c) in ("W", "F") for c in tok):
+            latin += 1
+    return cjk + latin
+
+
+def _check_max_bullets(limit: int):
+    def _run(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+        n = sum(1 for e in plan.elements
+                if e.payload and e.payload.text.strip().startswith("•"))
+        if n > limit:
+            issues.append({
+                "level": "warn", "category": "anti_ai",
+                "message": f"{n} bullets on this slide — theme recommends ≤{limit}. "
+                           f"Split into multiple slides or use visual alternatives.",
+                "rule": f"max_{limit}_bullets", "bullet_count": n,
+            })
+    return _run
+
+
+def _check_max_words_30(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    n = sum(_word_count(e.payload.text) for e in plan.elements if e.payload)
+    if n > 30:
+        issues.append({
+            "level": "warn", "category": "anti_ai",
+            "message": f"{n} words (CJK chars count individually) on this slide — "
+                       f"minimalist theme recommends ≤30.",
+            "rule": "max_30_words", "word_count": n,
+        })
+
+
+def _check_max_elements_3(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    n = len(plan.elements)
+    if n > 3:
+        issues.append({
+            "level": "info", "category": "anti_ai",
+            "message": f"{n} elements on this slide — minimalist theme prefers ≤3.",
+            "rule": "max_3_elements", "element_count": n,
+        })
+
+
+def _check_no_pure_text_colors(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    for e in plan.elements:
+        p = e.payload
+        if not p or not p.text.strip():
+            continue
+        fc = getattr(p, 'font_color', None)
+        if fc in ((0, 0, 0), (0xFF, 0xFF, 0xFF)):
+            issues.append({
+                "level": "info", "category": "anti_ai",
+                "message": f"'{e.elem_id}' uses pure {'black' if fc == (0,0,0) else 'white'} text. "
+                           f"Use near-black (#1A1A1A) or near-white (#F0F0F0) instead.",
+                "rule": "no_pure_black_white", "elem_id": e.elem_id,
+            })
+            return
+
+
+def _check_full_sentence_bullets(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    for e in plan.elements:
+        p = e.payload
+        if not p or not p.text.strip().startswith("•"):
+            continue
+        text = p.text.lstrip("• ").strip()
+        wc = _word_count(text)
+        if wc > 10:
+            issues.append({
+                "level": "info", "category": "anti_ai",
+                "message": f"Bullet '{text[:40]}...' is {wc} words — "
+                           f"corporate style prefers keyword bullets, not full sentences.",
+                "rule": "no_full_sentence_bullets", "elem_id": e.elem_id,
+            })
+            return
+
+
+def _check_no_bold_body(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    for e in plan.elements:
+        p = e.payload
+        if not p or not p.text.strip():
+            continue
+        style = (getattr(p, "style_name", "") or "").lower()
+        if style in ("body", "listitem", "caption") and p.font_bold:
+            issues.append({
+                "level": "info", "category": "anti_ai",
+                "message": f"'{e.elem_id}' is bold {style} text — minimalist theme forbids bold body.",
+                "rule": "no_bold_body_text", "elem_id": e.elem_id,
+            })
+            return
+
+
+def _check_never_decorative_shapes(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    from .types import ContentType
+    for e in plan.elements:
+        if e.content_type == ContentType.SHAPE and (not e.payload or not e.payload.text.strip()):
+            issues.append({
+                "level": "warn", "category": "anti_ai",
+                "message": f"Decorative shape '{e.elem_id}' found — minimalist theme forbids "
+                           f"decoration; keep only content.",
+                "rule": "never_use_decorative_shapes", "elem_id": e.elem_id,
+            })
+            return
+
+
+def _check_no_decorative_shapes_on_data_area(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """no_decorative_shapes_on_data_area：数据区（含 table/image/chart 的 region）不放纯装饰 shape。"""
+    from .types import ContentType
+    data_regions = {e.region_id for e in plan.elements
+                    if e.content_type in (ContentType.TABLE, ContentType.IMAGE, ContentType.CHART)}
+    if not data_regions:
+        return
+    for e in plan.elements:
+        if e.content_type == ContentType.SHAPE and e.region_id in data_regions \
+           and (not e.payload or not e.payload.text.strip()):
+            issues.append({
+                "level": "info", "category": "anti_ai",
+                "message": f"Decorative shape '{e.elem_id}' sits in data region '{e.region_id}' — "
+                           f"academic theme wants data areas free of decoration.",
+                "rule": "no_decorative_shapes_on_data_area", "elem_id": e.elem_id,
+            })
+            return
+
+
+def _check_leave_half_empty(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    total = plan.page_w * plan.page_h
+    if total <= 0:
+        return
+    occupied = sum(e.w * e.h for e in plan.elements) / total
+    if occupied > 0.5:
+        issues.append({
+            "level": "warn", "category": "anti_ai",
+            "message": f"Content occupies {occupied:.0%} of page — minimalist theme wants "
+                       f"≥50% empty. Remove elements, don't rearrange them.",
+            "rule": "leave_half_page_empty", "occupied": round(occupied, 2),
+        })
+
+
+def _check_key_numbers(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """key_numbers_must_be_large_and_bold：纯数字/百分比文本（关键数字）应 ≥24pt 加粗。"""
+    import re as _re
+    for e in plan.elements:
+        p = e.payload
+        if not p:
+            continue
+        t = p.text.strip()
+        if not t or not _re.fullmatch(r"[\d.,%‰x×+\-–—/]+\s*[a-zA-Z%‰]*", t):
+            continue
+        if len(t) > 12:  # 长串数字更可能是数据表内容而非关键数字
+            continue
+        if p.font_size < 24 or not p.font_bold:
+            issues.append({
+                "level": "info", "category": "anti_ai",
+                "message": f"Key number '{t}' rendered at {p.font_size:.0f}pt"
+                           f"{' non-bold' if not p.font_bold else ''} — "
+                           f"corporate theme wants key numbers ≥24pt bold.",
+                "rule": "key_numbers_must_be_large_and_bold", "elem_id": e.elem_id,
+            })
+            return
+
+
+def _check_minimize_text(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """minimize_text_count_per_slide：tech 主题倾向少文字 — 每页总字符数超阈值提醒。"""
+    total_chars = sum(len((e.payload.text or "").strip()) for e in plan.elements
+                      if e.payload and e.payload.text.strip())
+    if total_chars > 180:
+        issues.append({
+            "level": "info", "category": "anti_ai",
+            "message": f"{total_chars} chars on this slide — tech product theme prefers "
+                       f"minimal text. Split or trim.",
+            "rule": "minimize_text_count_per_slide", "char_count": total_chars,
+        })
+
+
+def _check_one_hero(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """one_hero_element_per_slide：>15% 页面面积的视觉主体每页至多一个。"""
+    page_area = plan.page_w * plan.page_h
+    if page_area <= 0:
+        return
+    heroes = [e for e in plan.elements if e.w * e.h > page_area * 0.15]
+    if len(heroes) > 1:
+        issues.append({
+            "level": "info", "category": "anti_ai",
+            "message": f"{len(heroes)} hero elements (>15% page each) — "
+                       f"tech theme wants ONE protagonist per slide.",
+            "rule": "one_hero_element_per_slide",
+            "hero_ids": [e.elem_id for e in heroes],
+        })
+
+
+def _check_no_rounded_cards(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """no_rounded_cards（圆角卡禁令，academic/tech 共用）。
+    （旧版注释谎称"engine can't read shape_id"——payload.shape_id 一直可读）"""
+    for e in plan.elements:
+        p = e.payload
+        if p and (p.shape_id or "") in ("rounded_rectangle", "oval"):
+            issues.append({
+                "level": "info", "category": "anti_ai",
+                "message": f"'{e.elem_id}' is a rounded card ({p.shape_id}) — theme forbids them; "
+                           f"use sharp rectangles (b.box() auto-applies swiss no-rounding).",
+                "rule": "no_rounded_cards", "elem_id": e.elem_id,
+            })
+            return
+
+
+def _check_captions_numbered(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """captions_must_be_numbered：图片说明应以编号开头（如 'Figure 1.' / '图1'）。"""
+    import re as _re
+    for e in plan.elements:
+        p = e.payload
+        if not p:
+            continue
+        cap = (p.caption or "").strip()
+        if cap and not _re.match(r"^(figure|fig\.|图|表)?\s*\d+", cap, _re.IGNORECASE):
+            issues.append({
+                "level": "info", "category": "anti_ai",
+                "message": f"Caption '{cap[:30]}' is not numbered — academic theme requires "
+                           f"'Figure N.' style captions (engine auto-numbers when caption='').",
+                "rule": "captions_must_be_numbered", "elem_id": e.elem_id,
+            })
+            return
+
+
+def _check_data_sources_cited(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """data_sources_must_be_cited：含表格/图片的数据页应有来源标注。"""
+    from .types import ContentType
+    has_data = any(e.content_type in (ContentType.TABLE, ContentType.IMAGE, ContentType.CHART)
+                   for e in plan.elements)
+    if not has_data:
+        return
+    import re as _re
+    pat = _re.compile(r"来源|出处|数据来自|source|reference|参考文献|\[\d+\]", _re.IGNORECASE)
+    for e in plan.elements:
+        p = e.payload
+        if p and p.text.strip() and pat.search(p.text):
+            return
+        if p and p.caption and pat.search(p.caption):
+            return
+    issues.append({
+        "level": "info", "category": "anti_ai",
+        "message": "Data/table/image present but no source citation found — "
+                   "academic theme requires '来源: ...' or [n] references.",
+        "rule": "data_sources_must_be_cited",
+    })
+
+
+def _check_image_high_res(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """image_must_be_high_res：图片像素密度 < ~110dpi（px/pt < 1.5）→ 警告。"""
+    import os
+    from .types import ContentType
+    for e in plan.elements:
+        p = e.payload
+        if e.content_type != ContentType.IMAGE or not p or not p.image_path:
+            continue
+        if not os.path.isfile(p.image_path):
+            continue
+        try:
+            from PIL import Image
+            iw, ih = Image.open(p.image_path).size
+        except Exception:
+            continue
+        if e.w <= 0 or e.h <= 0:
+            continue
+        ppi = min(iw / e.w, ih / e.h)
+        if ppi < 1.5:
+            issues.append({
+                "level": "warn", "category": "anti_ai",
+                "message": f"Image '{e.elem_id}' is {iw}×{ih}px over {e.w:.0f}×{e.h:.0f}pt "
+                           f"(~{ppi*72:.0f}dpi) — below print quality. Use higher resolution.",
+                "rule": "image_must_be_high_res", "elem_id": e.elem_id,
+            })
+            return
+
+
+def _check_grid_alignment_perfect(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """ensure_perfect_alignment_in_grid：>3 条不同的左边缘线 → 网格失控。"""
+    edges = {round(e.x / 4) for e in plan.elements}  # 4pt 容差合并
+    if len(edges) > 3:
+        issues.append({
+            "level": "info", "category": "anti_ai",
+            "message": f"{len(edges)} distinct left-edge positions — corporate grid wants ≤3 "
+                       f"alignment columns. Realign elements to a shared grid.",
+            "rule": "ensure_perfect_alignment_in_grid", "edge_count": len(edges),
+        })
+
+
+def _check_no_grid_layouts(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """no_grid_layouts：minimalist 禁网格——元素高度对齐到共享网格 → 提示。"""
+    if len(plan.elements) < 3:
+        return
+    xs = {round(e.x / 8) for e in plan.elements}
+    if len(xs) <= 2:  # 元素挤在少数几条垂直线 → 网格感
+        issues.append({
+            "level": "info", "category": "anti_ai",
+            "message": f"Elements align to {len(xs)} vertical lines — reads as a grid. "
+                       f"Minimalist theme wants asymmetric, off-grid placement.",
+            "rule": "no_grid_layouts", "edge_count": len(xs),
+        })
+
+
+def _check_allow_asymmetric(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """allow_asymmetric_placement：minimalist 允许不对称——过度对称/居中 → 提示。"""
+    if len(plan.elements) < 2:
+        return
+    centers_x = [e.x + e.w / 2 for e in plan.elements]
+    page_cx = plan.page_w / 2
+    sym = sum(1 for cx in centers_x if abs(cx - page_cx) < 12)
+    if sym >= max(2, len(plan.elements) * 0.7):
+        issues.append({
+            "level": "info", "category": "anti_ai",
+            "message": f"{sym}/{len(plan.elements)} elements centered on the vertical axis — "
+                       f"too symmetric for minimalist theme. Off-center for asymmetry.",
+            "rule": "allow_asymmetric_placement", "centered": sym,
+        })
+
+
+def _check_avoid_white_bg(plan: LayoutPlan, issues: list[dict], theme: dict | None = None) -> None:
+    """avoid_white_background：主题本身为浅底时被覆盖回浅色 → 提醒。"""
+    if not theme:
+        return
+    bg_hex = (theme.get("color_roles", {}) or {}).get("bg", "")
+    if not bg_hex:
+        return
+    try:
+        from .color_utils import hex_to_rgb, luminance_L
+        if luminance_L(hex_to_rgb(bg_hex)) > 90:
+            issues.append({
+                "level": "warn", "category": "anti_ai",
+                "message": f"Slide bg {bg_hex} is near-white — tech theme requires a dark field.",
+                "rule": "avoid_white_background",
+            })
+    except Exception:
+        pass
+
+
+# ═══════════════════════════════════════════════════════════════
+# 反 AI 规则注册表 — themes.json 声明的每条规则必须在此登记：
+#   callable      → 每页执行的检查器 (plan, issues, theme) -> None
+#   "structural"  → 引擎结构性保证（渲染器只做纯色填充/无渐变无阴影/无 deck 级执行点）
+#   未登记        → builder 在主题加载时通过 unimplemented_rules() 显式报告
+# ═══════════════════════════════════════════════════════════════
+
+ANTI_AI_RULE_REGISTRY: dict[str, object] = {
+    # 结构性保证（渲染器能力边界内不可能违反）
+    "no_gradients_or_glows": "structural",       # 渲染器只做 solid fill，无渐变通道
+    "no_gradients_or_shadows": "structural",     # 同上（修正 themes.json 的拼写漂移）
+    "no_same_layout_all_slides": "structural",   # deck 级检查：builder._check_repeated_layout
+    # 可执行检查器
+    "no_more_than_5_bullets_per_slide": _check_max_bullets(5),
+    "no_bullet_lists_over_3_items": _check_max_bullets(3),
+    "text_must_be_under_30_words_per_slide": _check_max_words_30,
+    "no_more_than_3_elements_per_slide": _check_max_elements_3,
+    "no_pure_white_or_pure_black_text": _check_no_pure_text_colors,
+    "no_pure_black_pure_white": _check_no_pure_text_colors,
+    "avoid_full_sentences_in_bullets": _check_full_sentence_bullets,
+    "no_em_dash_in_copy": lambda p, i, t=None: _check_em_dash(p, i),
+    "no_section_number_eyebrow": lambda p, i, t=None: _check_section_number_eyebrow(p, i),
+    "no_version_label_in_hero": lambda p, i, t=None: _check_version_label(p, i),
+    "shape_family_consistency": lambda p, i, t=None: _check_shape_family(p, i),
+    "single_accent_color_lock": _check_single_accent_lock,
+    "accent_coverage_max_20pct": _check_accent_coverage,
+    "shape_size_anchor_rule": lambda p, i, t=None: _check_shape_anchor(p, i),
+    "shape_types_max_2": lambda p, i, t=None: _check_shape_types_limit(p, i),
+    "shape_style_no_mix": _check_shape_style_mix,
+    "no_bold_body_text": _check_no_bold_body,
+    "never_use_decorative_shapes": _check_never_decorative_shapes,
+    "leave_half_page_empty": _check_leave_half_empty,
+    "key_numbers_must_be_large_and_bold": _check_key_numbers,
+    "one_hero_element_per_slide": _check_one_hero,
+    "no_rounded_cards": _check_no_rounded_cards,
+    "no_decorative_shapes_on_data_area": _check_no_decorative_shapes_on_data_area,
+    "captions_must_be_numbered": _check_captions_numbered,
+    "data_sources_must_be_cited": _check_data_sources_cited,
+    "image_must_be_high_res": _check_image_high_res,
+    "ensure_perfect_alignment_in_grid": _check_grid_alignment_perfect,
+    "avoid_white_background": _check_avoid_white_bg,
+    "minimize_text_count_per_slide": _check_minimize_text,
+    "no_grid_layouts": _check_no_grid_layouts,
+    "allow_asymmetric_placement": _check_allow_asymmetric,
+    "use_gradient_overlay_for_image_readability": "structural",  # 渲染器不做渐变遮罩
+    "text_over_images_must_have_dark_overlay": "structural",     # 无图叠加渲染通道
+    # cards_must_have_consistent_size 是正向契约（ suppresses vary_card_sizes），非检查器
+    "cards_must_have_consistent_size": "structural",
+}
+
+def unimplemented_rules(theme_rules: list[str]) -> list[str]:
+    """返回主题声明了但注册表中没有的规则——显式报告，不再静默忽略。"""
+    return [r for r in theme_rules if r not in ANTI_AI_RULE_REGISTRY]

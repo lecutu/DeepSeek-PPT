@@ -13,7 +13,13 @@ class DiffReport:
 
 
 class DiffLog:
-    """Per-deck-session mutation trace. snap_before/after → diff() → clear()."""
+    """Per-deck-session mutation trace. roll() → snap_after() → diff() → clear().
+
+    2026-08 审查修复：旧版 snap_before/snap_after 在同一次 build 内对同一个 plan
+    拍两次照 → before/after 恒等 → diff 恒为空、scope_alert 恒误报 missing。
+    新语义：build 开始 roll()（上次的 after 滚动为 before），build 结束 snap_after()，
+    diff 比较的是**相邻两次 build**的元素集合净变化。
+    """
 
     def __init__(self):
         self._before: dict = {}
@@ -23,9 +29,10 @@ class DiffLog:
     def set_intent_scope(self, scope: dict):
         self._intent_scope = scope
 
-    def snap_before(self, plan, slide_idx: int):
-        elem_ids = {pe.elem_id for pe in getattr(plan, 'phase1_elements', [])}
-        self._before[slide_idx] = elem_ids
+    def roll(self):
+        """build 开始时调用：上一次 build 的 after 成为本次的 before。"""
+        self._before = dict(self._after)
+        self._after = {}
 
     def snap_after(self, plan, slide_idx: int):
         elem_ids = {pe.elem_id for pe in getattr(plan, 'phase1_elements', [])}
@@ -61,3 +68,7 @@ class DiffLog:
         self._before.clear()
         self._after.clear()
         self._intent_scope.clear()
+
+    # 向后兼容：旧调用点（builder 内的 snap_before）→ roll 语义
+    def snap_before(self, plan, slide_idx: int):
+        pass  # 已废弃：before 由 roll() 提供

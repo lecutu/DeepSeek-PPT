@@ -63,13 +63,13 @@ errs = [d for d in r["diagnostics"] if d["severity"] == "error"]
 print(f"Errors: {len(errs)}")  # Should be 0
 ```
 
-### Guaranteed errors — NEVER use these
+### Likely errors — high risk, check before use
 
-| ❌ NEVER | Why it breaks | Error |
+| ⚠️ RISK | Why | Error |
 |:--|:--|:--|
-| `b.text("...", style="Heading")` in header region | 28pt bold → needs ~49pt height, header is 50pt → overflow after inset | `overflow_vertical` |
+| `b.text("...", style="Heading")` in short header | 28pt bold → needs ~49pt height, header <50pt → overflow after inset | `overflow_vertical` |
 | `b.text("...", style="Subheading")` in small region | 20pt font → box too small after inset | `overflow_vertical` |
-| `b.text("...", style="Emphasis")` | same problem — bold 16pt → needs > allocated | `overflow_vertical` |
+| `b.text("...", style="Emphasis")` | bold 16pt → needs > allocated in tight regions | `overflow_vertical` |
 | `b.text("...", style="Body")` in fixed-height region | Body is 18pt, box auto-grows but may still clip | `overflow_vertical` roundtrip error |
 | `b.image(..., caption="...")` | Caption text triggers overflow check | `overflow_vertical` |
 | `template="product"` + `style="creative_vibrant"` | creative_vibrant overrides bg to light → white text invisible | `tri_bg_fill` contrast BLOCK |
@@ -95,8 +95,8 @@ print(f"Errors: {len(errs)}")  # Should be 0
 ### Key rules
 
 - **header region ≥ 60pt tall** for `b.title()`. 50pt is too short.
-- **For text content: use `b.box()` not `b.text(Body)`.** Box auto-expands; Body text in fixed regions overflows.
-- **For headings: use `b.title()` only.** Never `b.text(style="Heading")`.
+- **For text content: prefer `b.box()` over `b.text(Body)`.** Box auto-expands; Body text in fixed regions may clip.
+- **For headings: use `b.title()`.** It's the Heading style with built-in margin; `b.text(style="Heading")` needs a ≥50pt region.
 - **Images: no captions.** `caption=""` or omit.
 - **Dark themes: `product` template ONLY with `tech_dark` style.** Nothing else.
 - **First build with skeleton. Iterate from 0 errors.** Don't start from scratch.
@@ -107,6 +107,13 @@ print(f"Errors: {len(errs)}")  # Should be 0
 
 > 来源：`D:\文献搜索员\ppt-design-research.md` — Anthropic/医学/神经科学实测 + guizang Swiss 逆向。
 > 引擎已把下列规则编译成 `anti_ai_rules` 检查（见 themes.json）。这里管 Agent 的手。
+
+**规则体系（语义模板，非死配置）：**
+- 每个主题的 `anti_ai_rules` 是"AI 写语义"的设计契约，`get_theme_rules(theme_id)` 按需暴露
+- **全局通用规则**（4 主题共享，不是冗余）：`no_em_dash_in_copy`（禁 em-dash）/ `no_section_number_eyebrow`（禁 01/02 序号）/ `no_version_label_in_hero`（禁版本号）/ `no_same_layout_all_slides`（跨页布局不雷同）
+- **形状纪律**（3 主题共享）：`shape_types_max_2`（≤2 种形状）/ `shape_style_no_mix`（圆润尖锐不混）/ `shape_size_anchor_rule`（大形状做锚点）/ `shape_family_consistency`（几何家族统一）
+- **规则注册表**：`grid/composition.py` 的 `ANTI_AI_RULE_REGISTRY` 登记每条规则对应的检查器，未登记的加载时显式报告（`b.unimplemented_anti_ai_rules` 恒空 = 全部生效）
+- **矛盾已消解**：`cards_must_have_consistent_size` 存在时抑制 `vary_card_sizes`；`no_rounded_cards` 为统一规范名
 
 ### ① 配色铁律
 
@@ -224,11 +231,11 @@ b.add_slide("Slide title",
 ### Element API — every method
 
 ```python
-# TEXT (safe: title/subtitle/Caption only)
-b.title("Title text", region="header")                  # ⭐ Use this for headings — NOT b.text(Heading)
+# TEXT (safe: title/subtitle/Caption preferred)
+b.title("Title text", region="header")                  # ⭐ Use this for headings — style=Heading with ph=40 margin
 b.subtitle("Subtitle text", region="header")            # 18pt, gray, ph=30
-b.text("Body text", style="Caption", region="main")     # ⭐ Use Caption — NOT Body/Heading/Emphasis/Subheading
-# b.text(style="Subheading") → GUARANTEED overflow, see error table below
+b.text("Body text", style="Caption", region="main")     # ⭐ Caption (10pt) fits any region. Other styles OK if region is tall enough.
+# b.text(style="Heading/Subheading/Emphasis/Body") → risky in short regions, see Likely errors table above
 
 # LISTS — always safe
 b.bullet("List item text", region="main")               # 13pt, auto-flow — ALWAYS SAFE
@@ -238,7 +245,7 @@ b.footer("Copyright 2024", region="footer")             # dimmed, small — safe
 
 # CARDS — always safe (auto-height)
 b.box("Card content here\n\nMultiple paragraphs OK",
-      style="Body", region="card",                      # style: Body only (not Heading/Subheading)
+      style="Body", region="card",                      # style: Body is standard — box auto-expands height
       fill_color=(16,26,45),                             # dark fill → white text automatic
       shape_id="rounded_rectangle",                      # 20 shapes available (see below)
       ph=None, align_h="left", allow_shrink=False)       # ph=override height; align_h=left|center|right
@@ -351,10 +358,12 @@ for d in r["diagnostics"]:
 | `error` + `freeze` + TEXT | Text overflow in fixed box | 🔧 FIX |
 | `error` + `3.0 tri_*` | Contrast/invisible text | 🔧 FIX |
 | **`warning` + `freeze` + b.box()** | **Box overflow — PPTX auto-expands** | **🚫 IGNORE** |
-| `warning` (any phase) | Margin, spacing, L* | 🚫 IGNORE |
+| **`warning` + `2/3.0/2.5`** | **`overlap` / `tri_*` / anti-AI** | **👀 Worth reading — cross-region collision, contrast, AI-tell** |
+| `warning` (other) | Margin, spacing, density | 🚫 IGNORE |
 | `info` (any phase) | Advisory | 🚫 IGNORE |
 
 **Golden rule: file >100KB on disk → it's fine. Don't read diagnostics beyond `[d for d in r["diagnostics"] if d["severity"]=="error"]`.**
+**Strict mode: `PPTBuilder(..., strict_anti_ai=True)` 将 anti-AI warning 升级为 error，需要时才开。**
 
 ### Token explosion prevention — 3 IRON RULES
 
@@ -540,8 +549,7 @@ print(f"Slides: {n_slides}, Elements: {n_elements}, Shapes: {n_shapes}, Boxes: {
 
 1. **Do NOT read ppt_reflex/ source code.** All APIs are in this doc.
 2. **Do NOT import from grid/ directly.** Only `from ppt_reflex.builder import PPTBuilder`.
-3. **Do NOT use `b.text(style="Heading")`/`Subheading`/`Emphasis`/`Body`.** Use `b.title()` + `b.box()` + `b.bullet()` instead.
-4. **Do NOT add captions to images.** `caption=""` or omit.
-5. **Do NOT mix light-bg templates with dark-bg styles.** `product` template ONLY with `tech_dark` style.
-6. **Do NOT use 50pt header regions for titles.** Minimum 60pt.
-7. **Do NOT self-author palette colors.** Use theme's `palettes` or explicit overrides from the 美学宪法 ①.
+3. **Do NOT rely on `b.text()` as the default body-text tool.** Prefer `b.title()` for headings, `b.bullet()` for lists, `b.box()` for text cards — they auto-fit. If you must use `b.text()`, pass `style="Caption"` (10pt, fits any region).
+4. **Do NOT mix light-bg templates with dark-bg styles.** `product` template ONLY with `tech_dark` style.
+5. **Do NOT use 50pt header regions for titles.** Minimum 60pt.
+6. **Do NOT self-author palette colors.** Use theme's `palettes` or explicit overrides from the 美学宪法 ①.

@@ -7,7 +7,7 @@ python-pptx font metrics differ from engine heuristics; only the saved file tell
 from __future__ import annotations
 from pptx import Presentation
 from pptx.util import Pt
-from .grid.text_metrics import estimate_text_size, _line_width
+from .grid.text_metrics import estimate_text_size, _line_width, _longest_unbreakable_width
 
 
 def check_overflow(path: str) -> list[dict]:
@@ -36,12 +36,24 @@ def check_overflow(path: str) -> list[dict]:
             actual_w = shape.width / 12700
             actual_h = shape.height / 12700
 
-            # Get dominant font size across all runs (mode, not just first)
+            # Dominant font size: run-level AND paragraph-level defaults
+            # (engine 渲染把字号写在段落级 — serializer._render_payload)
             font_sizes: dict[float, int] = {}
             line_spacing = 1.2
             for para in tf.paragraphs:
-                if para.line_spacing:
-                    line_spacing = para.line_spacing / 12700 / max(12.0, 0.1)
+                ls = para.line_spacing
+                if ls is not None:
+                    # python-pptx: float = 倍数行距（直接使用）；Length(Emu) = 固定行距
+                    if isinstance(ls, float):
+                        line_spacing = ls
+                    else:
+                        try:
+                            line_spacing = ls / 12700 / 12.0
+                        except TypeError:
+                            pass
+                if para.font.size:
+                    fs = para.font.size / 12700
+                    font_sizes[fs] = font_sizes.get(fs, 0) + 2  # 段落级默认权重更高
                 for run in para.runs:
                     if run.font.size:
                         fs = run.font.size / 12700
@@ -87,13 +99,8 @@ def check_overflow(path: str) -> list[dict]:
                     ),
                 })
 
-            # ── Horizontal overflow: longest unbreakable word vs box width ──
-            longest_word_w = 0.0
-            for line in text.split("\n"):
-                for word in line.split(" "):
-                    ww = _line_width(word, font_size)
-                    if ww > longest_word_w:
-                        longest_word_w = ww
+            # ── Horizontal overflow: 最长不可断单元 vs 盒宽（CJK 任意字符可断）──
+            longest_word_w, _ = _longest_unbreakable_width(text, font_size)
             if actual_w > 0 and longest_word_w > actual_w + 1:
                 results.append({
                     "slide": si,

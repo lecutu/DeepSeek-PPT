@@ -393,14 +393,13 @@ def _check_repeated_errors(raw_diags: list[dict]) -> list[DesignHint]:
                 level="critical", category="color",
                 message=(
                     f"{len(errs)} elements across {len(slides)} slides have "
-                    f"white text on near-white background (contrast < 1.1:1). "
-                    f"DARK BOX TRAP: white text in dark boxes on cream bg. "
-                    f"→ Switch to dark bg, or use dark text in light boxes."
+                    f"text nearly invisible against the slide background. "
+                    f"Scheme-level problem — don't patch colors one by one."
                 ),
                 affected_slides=slides,
                 fix_strategy=(
-                    "Option A: Switch to template='product'+style='tech_dark'. "
-                    "Option B: Keep cream bg, use dark text (#1E293B) in light boxes."
+                    "Option A: switch to a dark template+style for white text. "
+                    "Option B: keep light bg, use dark text (#1E293B)."
                 ),
             ))
 

@@ -30,6 +30,7 @@ class TemplateProfile:
     body_font: str = "Microsoft YaHei"
     title_size: int = 28          # pt
     body_size: int = 18           # pt
+    subtitle_size: int = 0        # pt; 0 = auto (body_size + 4)
     caption_size: int = 14        # pt
     page_number_size: int = 12
 

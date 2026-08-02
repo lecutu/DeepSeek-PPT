@@ -271,14 +271,16 @@ class GridCanvas:
             for deco in self._decoration_payloads:
                 if deco.get("type") == "arrow":
                     o_bbox = _cells_union(fine_cells, self.config)
+                    dbox = (deco.get("x1", 0), deco.get("y1", 0),
+                            deco.get("x2", 0), deco.get("y2", 0))
                     if o_bbox and _rects_overlap(
-                        (deco_bbox[0], deco_bbox[1], deco_bbox[0] + deco_bbox[2], deco_bbox[1] + deco_bbox[3]),
+                        (dbox[0], dbox[1], dbox[2], dbox[3]),
                         (o_bbox[0], o_bbox[1], o_bbox[0] + o_bbox[2], o_bbox[1] + o_bbox[3])
                     ):
                         warnings.append({
-                            "owner_id": eid, "deco_id": deco_id,
+                            "owner_id": eid, "deco_id": deco.get("deco_id", ""),
                             "kind": "arrow_occlusion",
-                            "detail": f"arrow '{deco_id}' may cross-element '{eid}' — check readability"
+                            "detail": f"arrow '{deco.get('deco_id', '')}' may cross-element '{eid}' — check readability"
                         })
 
         return {"errors": errors, "warnings": warnings, "advisories": advisories}

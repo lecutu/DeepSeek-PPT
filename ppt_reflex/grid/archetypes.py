@@ -21,6 +21,9 @@ class SlideArchetype:
     regions: list[tuple]          # [(name, x, y, w, h, z_order), ...]
     zone_map: dict[str, str] = field(default_factory=dict)
     ai_guide: str = ""
+    # 分布组：ctype → 候选 region 列表，同类元素按声明顺序轮流分配
+    # （兑现 ai_guide 的"first→A, second→B / 自动分布到 4 卡位"承诺）
+    distribute: dict[str, list[str]] = field(default_factory=dict)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -87,6 +90,8 @@ ARCHETYPES: dict[str, SlideArchetype] = {
                   "box": "item_a", "bullet": "item_a", "text": "item_a",
                   "image": "item_b", "shape": "item_b", "table": "item_b",
                   "footer": "vs_center"},
+        distribute={"box": ["item_a", "item_b"], "bullet": ["item_a", "item_b"],
+                    "text": ["item_a", "item_b"]},
         ai_guide="title→header, first box/bullet→item_a, second box/bullet→item_b",
     ),
 
@@ -119,6 +124,9 @@ ARCHETYPES: dict[str, SlideArchetype] = {
         zone_map={"title": "header", "subtitle": "header",
                   "box": "card_tl", "image": "card_tl", "shape": "card_tl",
                   "text": "card_tl", "bullet": "card_tl"},
+        distribute={"box": ["card_tl", "card_tr", "card_bl", "card_br"],
+                    "image": ["card_tl", "card_tr", "card_bl", "card_br"],
+                    "shape": ["card_tl", "card_tr", "card_bl", "card_br"]},
         ai_guide="title→header, boxes auto-distributed across 4 card slots by insertion order",
     ),
 
@@ -244,7 +252,7 @@ LAYOUT_POLICIES: dict[str, LayoutPolicy] = {
     "academic": LayoutPolicy(
         title_align="LEFT", content_inset=16, card_gap=16,
         preferred_archetypes=["content", "data_showcase", "two_column", "conclusion"],
-        avoid_archetypes=["quote", "creative_vibrant"],
+        avoid_archetypes=["quote", "image_hero"],
     ),
     "business": LayoutPolicy(
         title_align="LEFT", content_inset=14, card_gap=18,

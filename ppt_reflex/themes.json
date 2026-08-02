@@ -12,29 +12,6 @@
       "mood": "rigorous, evidence-first, high density",
       "template": "academic",
       "style": "academic_rigorous",
-      "layout_strategy": {
-        "primary_archetype": "two_column",
-        "text_width_ratio": 0.3,
-        "image_width_ratio": 0.65,
-        "alignment": "top",
-        "grid_system": "strict",
-        "preferred_archetypes": [
-          "two_column",
-          "data_showcase",
-          "content",
-          "conclusion"
-        ],
-        "avoid_archetypes": [
-          "quote",
-          "image_hero",
-          "creative_vibrant"
-        ]
-      },
-      "design_dials": {
-        "variance": 4,
-        "motion": 2,
-        "density": 7
-      },
       "spacing": {
         "page_margin_pt": 28,
         "card_gap_pt": 16,
@@ -177,29 +154,6 @@
       "mood": "professional, modular, authoritative",
       "template": "business",
       "style": "corporate_minimal",
-      "layout_strategy": {
-        "primary_archetype": "grid_cards",
-        "header_height_pt": 48,
-        "content_alignment": "block_grid",
-        "card_style": "solid_background",
-        "preferred_archetypes": [
-          "content",
-          "grid_cards",
-          "comparison",
-          "data_showcase",
-          "conclusion"
-        ],
-        "avoid_archetypes": [
-          "quote",
-          "blank",
-          "image_hero"
-        ]
-      },
-      "design_dials": {
-        "variance": 4,
-        "motion": 2,
-        "density": 6
-      },
       "spacing": {
         "page_margin_pt": 36,
         "card_gap_pt": 24,
@@ -336,29 +290,6 @@
       "mood": "immersive, dramatic, cutting-edge",
       "template": "product",
       "style": "tech_dark",
-      "layout_strategy": {
-        "primary_archetype": "image_hero",
-        "image_behavior": "full_bleed_or_large",
-        "text_overlay": true,
-        "safe_zone": "center_rect_60_percent",
-        "preferred_archetypes": [
-          "title_cover",
-          "image_hero",
-          "quote",
-          "grid_cards",
-          "conclusion"
-        ],
-        "avoid_archetypes": [
-          "data_showcase",
-          "comparison",
-          "two_column"
-        ]
-      },
-      "design_dials": {
-        "variance": 7,
-        "motion": 6,
-        "density": 4
-      },
       "spacing": {
         "page_margin_pt": 0,
         "card_gap_pt": 32,
@@ -452,7 +383,7 @@
         "use_gradient_overlay_for_image_readability",
         "one_hero_element_per_slide",
         "no_bullet_lists_over_3_items",
-        "no_rounded_cards_with_shadows",
+        "no_rounded_cards",
         "text_over_images_must_have_dark_overlay",
         "no_em_dash_in_copy",
         "no_section_number_eyebrow",
@@ -520,29 +451,6 @@
       "mood": "airy, artistic, rule-breaking",
       "template": "minimal",
       "style": "editorial_magazine",
-      "layout_strategy": {
-        "primary_archetype": "blank",
-        "grid_system": "free_position",
-        "overlap_allowed": true,
-        "preferred_archetypes": [
-          "title_cover",
-          "quote",
-          "image_hero",
-          "content",
-          "conclusion"
-        ],
-        "avoid_archetypes": [
-          "grid_cards",
-          "data_showcase",
-          "comparison",
-          "timeline"
-        ]
-      },
-      "design_dials": {
-        "variance": 9,
-        "motion": 4,
-        "density": 2
-      },
       "spacing": {
         "page_margin_pt": 48,
         "card_gap_pt": 32,
@@ -597,7 +505,7 @@
       },
       "color_roles": {
         "bg": "#F7F4EF",
-        "surface": "#F0ECe6",
+        "surface": "#F0ECE6",
         "text_primary": "#14110E",
         "text_secondary": "#737373",
         "accent": "#C2410C",

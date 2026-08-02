@@ -88,6 +88,22 @@ class SpatialIndex:
             if gaps:
                 self.gap_matrix_rows[r] = [round(g, 1) for g in gaps]
 
+        # gap_matrix_cols (coarse-col based) — 2026-08 审查：字段声明了但从未计算，inspect 恒返回 {}
+        self.gap_matrix_cols.clear()
+        cols: dict[int, list[tuple[str, float, float]]] = {}  # col → [(eid, y_top, y_bottom)]
+        for eid, data in elements.items():
+            if data["locked"]:
+                continue
+            x, y, w, h = data["bbox"]
+            c = int(x / grid.config.coarse_cell_pt)
+            cols.setdefault(c, []).append((eid, y, y + h))
+        for c, items in cols.items():
+            items.sort(key=lambda t: t[1])
+            gaps = [items[i+1][1] - items[i][2] for i in range(len(items) - 1)]
+            gaps = [g for g in gaps if g >= 0]
+            if gaps:
+                self.gap_matrix_cols[c] = [round(g, 1) for g in gaps]
+
         # alignment groups
         self.alignment_groups.clear()
         for eid, data in elements.items():

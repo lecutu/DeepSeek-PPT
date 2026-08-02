@@ -29,10 +29,9 @@ from .profiles import infer_profile
 from .text_metrics import estimate_text_size, expand_bbox, OverflowReport, check_overflow_2d
 from .aesthetics import AestheticsEngine, AestheticViolation, ElemStyle
 from .templates import get_template, TemplateProfile, list_templates
-from .plan import LayoutPlan, Region, Phase1Element, DecoIntent, DecorationSpec, PageElement, LayoutDiagnostic, FeedbackBundle
+from .plan import LayoutPlan, Region, Phase1Element, DecoIntent, DecorationSpec, PageElement, LayoutDiagnostic
 from .phase1 import execute_phase1, audit_plan
 from .phase2 import execute_phase2
-from .orchestrator import layout_loop
 from .composition import global_composition_check
 
 __all__ = [
@@ -62,14 +61,14 @@ __all__ = [
     # profiles
     "infer_profile",
     # text_metrics
-    "estimate_text_size", "expand_bbox", "OverflowReport",
+    "estimate_text_size", "expand_bbox", "OverflowReport", "check_overflow_2d",
     # aesthetics
     "AestheticsEngine", "AestheticViolation", "ElemStyle",
     # templates
-    "TEMPLATES", "TemplateProfile", "get_template", "AGENT_PROMPT",
+    "TemplateProfile", "get_template", "list_templates",
     # two-layer five-phase architecture
     "LayoutPlan", "Region", "Phase1Element", "DecoIntent",
-    "DecorationSpec", "PageElement", "LayoutDiagnostic", "FeedbackBundle",
+    "DecorationSpec", "PageElement", "LayoutDiagnostic",
     "execute_phase1", "audit_plan", "execute_phase2",
-    "layout_loop", "global_composition_check",
+    "global_composition_check",
 ]

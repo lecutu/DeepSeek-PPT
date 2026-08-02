@@ -76,6 +76,43 @@ def _line_width(line: str, font_pt: float) -> float:
     return max(w, 0.0)
 
 
+def _unbreakable_runs(line: str) -> list[str]:
+    """把一行切成"不可断单元"——PowerPoint 换行规则：
+
+    - 拉丁文本：空格/空白分词，词内不可断（长词会溢出）
+    - CJK/全角字符：每个字符都可断（PPT 在任意 CJK 字符间换行）
+    """
+    runs: list[str] = []
+    buf: list[str] = []
+    for ch in line:
+        if ch.isspace():
+            if buf:
+                runs.append("".join(buf))
+                buf = []
+            continue
+        if _is_fullwidth(ch):
+            if buf:
+                runs.append("".join(buf))
+                buf = []
+            runs.append(ch)
+        else:
+            buf.append(ch)
+    if buf:
+        runs.append("".join(buf))
+    return runs
+
+
+def _longest_unbreakable_width(text: str, font_pt: float) -> tuple[float, str]:
+    """全文最长不可断单元的宽度——横向溢出的真实下界。"""
+    longest_w, longest = 0.0, ""
+    for line in text.split("\n"):
+        for run in _unbreakable_runs(line):
+            w = _line_width(run, font_pt)
+            if w > longest_w:
+                longest_w, longest = w, run
+    return longest_w, longest
+
+
 def estimate_text_size(
     text: str,
     font_pt: float,
@@ -203,15 +240,8 @@ def check_overflow_2d(
 
     # ── Horizontal ──
     if not h_auto_fit and box_w > 0:
-        # Find longest unbreakable word (split on whitespace)
-        longest_word_w = 0.0
-        longest_word = ""
-        for line in text.split("\n"):
-            for word in line.split(" "):
-                ww = _line_width(word, font_pt)
-                if ww > longest_word_w:
-                    longest_word_w = ww
-                    longest_word = word
+        # 最长不可断单元（拉丁按词，CJK 按字——PPT 在任意 CJK 字符间换行）
+        longest_word_w, longest_word = _longest_unbreakable_width(text, font_pt)
 
         tolerance_w = max(box_w * _OVERFLOW_TOLERANCE_RATIO, _OVERFLOW_TOLERANCE_MIN)
         if longest_word_w > box_w + tolerance_w:
